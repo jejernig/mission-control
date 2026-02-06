@@ -29,11 +29,51 @@ export interface Agent {
   status: AgentStatus;
   is_master: boolean;
   workspace_id: string;
+  scope?: 'org' | 'workspace';
+  organization_id?: string;
   soul_md?: string;
   user_md?: string;
   agents_md?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface CreateCapabilityRequest {
+  domain: string;
+  layer: string;
+  skills: string | string[];
+  confidence?: number;
+}
+
+export interface AgentCapability {
+  id: string;
+  agent_id: string;
+  domain: string;
+  layer: string;
+  skills: string;
+  confidence: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaskAnalysis {
+  keywords: string[];
+  domain: string;
+  layer: string;
+  skills: string[];
+  confidence: number;
+}
+
+export interface AnalyzeTaskResponse {
+  task_id: string;
+  analysis: TaskAnalysis;
+  analyzed_at: string;
+}
+
+export interface AgentMatch {
+  agent: Agent;
+  confidence: number;
+  reasoning: string;
 }
 
 export interface Task {

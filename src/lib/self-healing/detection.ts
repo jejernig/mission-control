@@ -4,7 +4,7 @@
  */
 
 import type { Task } from '../types';
-import { db } from '../db';
+import { getDb } from '../db';
 
 export interface DetectionResult {
   issueDetected: boolean;
