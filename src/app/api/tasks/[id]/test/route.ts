@@ -287,7 +287,7 @@ async function testDeliverable(
   deliverable: TaskDeliverable,
   taskId: string
 ): Promise<TestResult> {
-  const startTime = Date.now();
+  const _startTime = Date.now();
   const consoleErrors: string[] = [];
   const consoleWarnings: string[] = [];
   const resourceErrors: ResourceError[] = [];

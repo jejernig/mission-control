@@ -29,7 +29,7 @@ const migrations: Migration[] = [
   {
     id: '002',
     name: 'add_workspaces',
-    up: (db) => {
+    up: (_db) => {
       console.log('[Migration 002] Adding workspaces table and columns...');
       
       // Create workspaces table if not exists
@@ -71,7 +71,7 @@ const migrations: Migration[] = [
   {
     id: '003',
     name: 'add_planning_tables',
-    up: (db) => {
+    up: (_db) => {
       console.log('[Migration 003] Adding planning tables...');
       
       // Create planning_questions table if not exists
@@ -116,7 +116,7 @@ const migrations: Migration[] = [
   {
     id: '004',
     name: 'add_planning_session_columns',
-    up: (db) => {
+    up: (_db) => {
       console.log('[Migration 004] Adding planning session columns to tasks...');
       
       const tasksInfo = db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[];
@@ -155,7 +155,7 @@ const migrations: Migration[] = [
   {
     id: '005',
     name: 'add_github_repo_to_workspaces',
-    up: (db) => {
+    up: (_db) => {
       console.log('[Migration 005] Adding github_repo to workspaces...');
       const columns = db.prepare("PRAGMA table_info(workspaces)").all() as { name: string }[];
       if (!columns.some(c => c.name === 'github_repo')) {
@@ -167,7 +167,7 @@ const migrations: Migration[] = [
   {
     id: '007',
     name: 'add_workspace_hierarchy',
-    up: (db) => {
+    up: (_db) => {
       console.log('[Migration 007] Adding workspace hierarchy (parent_id)...');
       
       // Add parent_id column to workspaces
@@ -185,7 +185,7 @@ const migrations: Migration[] = [
   {
     id: '006',
     name: 'add_tasks_archive_table',
-    up: (db) => {
+    up: (_db) => {
       console.log('[Migration 006] Creating tasks_archive table...');
       db.exec(`
         CREATE TABLE IF NOT EXISTS tasks_archive (
@@ -219,7 +219,7 @@ const migrations: Migration[] = [
   {
     id: '008',
     name: 'add_task_reviews',
-    up: (db) => {
+    up: (_db) => {
       console.log('[Migration 008] Creating task_reviews table for parallel reviews...');
       db.exec(`
         CREATE TABLE IF NOT EXISTS task_reviews (
@@ -242,7 +242,7 @@ const migrations: Migration[] = [
   {
     id: '009',
     name: 'add_commit_pr_review_types',
-    up: (db) => {
+    up: (_db) => {
       console.log('[Migration 009] Adding commit and pr review types...');
       // SQLite doesn't support ALTER CHECK constraint, so we recreate the table
       db.exec(`
@@ -271,7 +271,7 @@ const migrations: Migration[] = [
   {
     id: '010',
     name: 'add_task_hierarchy',
-    up: (db) => {
+    up: (_db) => {
       console.log('[Migration 010] Adding task hierarchy (parent_task_id)...');
       
       const columns = db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[];
@@ -289,7 +289,7 @@ const migrations: Migration[] = [
   {
     id: '011',
     name: 'add_agent_capabilities',
-    up: (db) => {
+    up: (_db) => {
       console.log('[Migration 011] Creating agent_capabilities table...');
       db.exec(`
         CREATE TABLE IF NOT EXISTS agent_capabilities (
@@ -310,7 +310,7 @@ const migrations: Migration[] = [
   {
     id: '012',
     name: 'add_openclaw_agent_id',
-    up: (db) => {
+    up: (_db) => {
       console.log('[Migration 012] Adding openclaw_agent_id to agents...');
       
       const columns = db.prepare("PRAGMA table_info(agents)").all() as { name: string }[];

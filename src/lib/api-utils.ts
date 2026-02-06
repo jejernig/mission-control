@@ -51,7 +51,7 @@ export function withErrorHandler<TContext = unknown>(
   return async (request: Request, context: TContext): Promise<NextResponse> => {
     try {
       return await handler(request, context);
-    } catch (error) {
+    } catch {
       console.error('Route handler error:', error);
       const message = error instanceof Error ? error.message : 'Internal server error';
       return apiError(message, ErrorStatus.INTERNAL_SERVER);
@@ -83,7 +83,7 @@ export async function validateBody<T extends z.ZodTypeAny>(
     }
     
     return result.data;
-  } catch (error) {
+  } catch {
     return apiError('Invalid JSON body', ErrorStatus.BAD_REQUEST);
   }
 }

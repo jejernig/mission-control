@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       const keepAliveInterval = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(`: keep-alive\n\n`));
-        } catch (error) {
+        } catch {
           // Client disconnected
           clearInterval(keepAliveInterval);
         }
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
         unregisterClient(controller);
         try {
           controller.close();
-        } catch (error) {
+        } catch {
           // Controller may already be closed
         }
       });

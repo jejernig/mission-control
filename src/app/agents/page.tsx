@@ -53,7 +53,7 @@ function AgentsPageContent() {
     load();
   }, []);
 
-  const orgId = workspaces.find((w) => w.id === 'default')?.organization_id ?? 'org-default';
+  const _orgId = workspaces.find((w) => w.id === 'default')?.organization_id ?? 'org-default';
 
   // Org-wide agents have workspace_id === null
   const orgAgents = agents.filter((a) => a.workspace_id === null);

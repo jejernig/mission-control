@@ -1,9 +1,8 @@
 'use client';
 
-import { Suspense, useState } from 'react';
-import { Plus, Folder } from 'lucide-react';
+import { useState } from 'react';
+import { Plus } from 'lucide-react';
 import { AsyncWorkspaceList } from './AsyncWorkspaceList';
-import { WorkspaceCardSkeleton } from './WorkspaceCardSkeleton';
 
 export function WorkspaceDashboard() {
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -43,18 +42,7 @@ export function WorkspaceDashboard() {
           </p>
         </div>
 
-        <Suspense
-          key={refreshKey}
-          fallback={
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <WorkspaceCardSkeleton />
-              <WorkspaceCardSkeleton />
-              <WorkspaceCardSkeleton />
-            </div>
-          }
-        >
-          <AsyncWorkspaceList onDelete={handleDelete} />
-        </Suspense>
+        <AsyncWorkspaceList key={refreshKey} onDelete={handleDelete} />
       </main>
 
       {/* Create Modal */}

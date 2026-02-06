@@ -37,7 +37,7 @@ Usage:
   if (issueArg && issueArg !== '--dry-run') {
     try {
       issue = JSON.parse(issueArg);
-    } catch (_error) {
+    } catch {
       console.error('Error: Invalid JSON for issue');
       process.exit(1);
     }

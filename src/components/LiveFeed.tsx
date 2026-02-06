@@ -23,29 +23,6 @@ export function LiveFeed() {
     return true;
   });
 
-  const getEventIcon = (type: string) => {
-    switch (type) {
-      case 'task_created':
-        return '📋';
-      case 'task_assigned':
-        return '👤';
-      case 'task_status_changed':
-        return '🔄';
-      case 'task_completed':
-        return '✅';
-      case 'message_sent':
-        return '💬';
-      case 'agent_joined':
-        return '🎉';
-      case 'agent_status_changed':
-        return '🔔';
-      case 'system':
-        return '⚙️';
-      default:
-        return '📌';
-    }
-  };
-
   return (
     <aside className="w-80 bg-mc-bg-secondary border-l border-mc-border flex flex-col">
       {/* Header */}

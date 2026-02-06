@@ -45,7 +45,7 @@ export class AgentMatcher {
     agent: Agent;
     capabilities: AgentCapability[];
   }> {
-    const db = getDb();
+    const _db = getDb();
 
     // Get agents in workspace (both workspace-scoped and org-scoped)
     const agents = db.prepare(`
@@ -147,7 +147,7 @@ export class AgentMatcher {
    * Save assignment suggestions to database
    */
   async saveSuggestions(taskId: string, matches: AgentMatch[]): Promise<void> {
-    const db = getDb();
+    const _db = getDb();
 
     // Clear existing suggestions for this task
     db.prepare('DELETE FROM assignment_suggestions WHERE task_id = ?').run(taskId);
@@ -168,7 +168,7 @@ export class AgentMatcher {
    * Get saved suggestions for a task
    */
   async getSuggestions(taskId: string): Promise<AgentMatch[]> {
-    const db = getDb();
+    const _db = getDb();
 
     const suggestions = db.prepare(`
       SELECT 
@@ -220,7 +220,7 @@ export class AgentMatcher {
     outcome?: 'success' | 'failure' | 'reassigned',
     metadata?: Record<string, any>
   ): Promise<void> {
-    const db = getDb();
+    const _db = getDb();
 
     const id = `hist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     

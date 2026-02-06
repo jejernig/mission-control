@@ -1,23 +1,14 @@
 'use client';
 
-import { Suspense, use } from 'react';
+import { useState, useEffect } from 'react';
 import { WorkspaceCardSkeleton } from './WorkspaceCardSkeleton';
 import type { WorkspaceStats } from '@/lib/types';
 import Link from 'next/link';
 import { ArrowRight, CheckSquare, Users, Trash2, AlertTriangle } from 'lucide-react';
-import { useState } from 'react';
 
 interface WorkspaceWithChildren extends WorkspaceStats {
   parent_id?: string | null;
   children?: WorkspaceWithChildren[];
-}
-
-// Create a promise-based data fetcher for use with Suspense
-function fetchWorkspaces(): Promise<WorkspaceWithChildren[]> {
-  return fetch('/api/workspaces?stats=true').then((res) => {
-    if (!res.ok) throw new Error('Failed to load workspaces');
-    return res.json();
-  });
 }
 
 function buildWorkspaceTree(workspaces: WorkspaceWithChildren[]): WorkspaceWithChildren[] {
@@ -160,14 +151,37 @@ function WorkspaceCard({
   );
 }
 
-function WorkspaceListContent({ 
-  workspacesPromise,
-  onDelete
-}: { 
-  workspacesPromise: Promise<WorkspaceWithChildren[]>;
-  onDelete: (id: string) => void;
-}) {
-  const workspaces = use(workspacesPromise);
+export function AsyncWorkspaceList({ onDelete }: { onDelete: (id: string) => void }) {
+  const [workspaces, setWorkspaces] = useState<WorkspaceWithChildren[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch('/api/workspaces?stats=true');
+        if (res.ok) {
+          const data = await res.json();
+          setWorkspaces(data);
+        }
+      } catch (error) {
+        console.error('Failed to load workspaces:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <WorkspaceCardSkeleton />
+        <WorkspaceCardSkeleton />
+        <WorkspaceCardSkeleton />
+      </div>
+    );
+  }
+
   const workspaceTree = buildWorkspaceTree(workspaces);
 
   if (workspaces.length === 0) {
@@ -184,27 +198,12 @@ function WorkspaceListContent({
         <WorkspaceCard 
           key={workspace.id} 
           workspace={workspace}
-          onDelete={onDelete}
+          onDelete={() => {
+            onDelete(workspace.id);
+            setWorkspaces(workspaces.filter(w => w.id !== workspace.id));
+          }}
         />
       ))}
     </div>
-  );
-}
-
-export function AsyncWorkspaceList({ onDelete }: { onDelete: (id: string) => void }) {
-  const [workspacesPromise] = useState(() => fetchWorkspaces());
-
-  return (
-    <Suspense
-      fallback={
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <WorkspaceCardSkeleton />
-          <WorkspaceCardSkeleton />
-          <WorkspaceCardSkeleton />
-        </div>
-      }
-    >
-      <WorkspaceListContent workspacesPromise={workspacesPromise} onDelete={onDelete} />
-    </Suspense>
   );
 }

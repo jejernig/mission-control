@@ -12,7 +12,6 @@
 
 import { DetectionService, loadConfigFromEnv } from '../src/lib/self-healing/detection-service';
 import { initializeSelfHealingDb } from '../src/lib/self-healing/init-db';
-import * as path from 'path';
 import * as fs from 'fs';
 
 const command = process.argv[2] || 'start';
