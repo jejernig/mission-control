@@ -10,17 +10,33 @@ import { existsSync } from 'fs';
 import path from 'path';
 import type { TaskDeliverable } from '@/lib/types';
 
+interface Workspace {
+  id: string;
+  github_repo?: string;
+}
+
 /**
  * GET /api/tasks/[id]/deliverables
  * Retrieve all deliverables for a task
+ * Transforms commit hashes to full GitHub URLs based on workspace config
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const taskId = params.id;
+    const { id: taskId } = await params;
     const db = getDb();
+
+    // Get task to find workspace
+    const task = db.prepare('SELECT workspace_id FROM tasks WHERE id = ?').get(taskId) as { workspace_id: string } | undefined;
+    
+    // Get workspace github_repo if available
+    let githubRepo: string | null = null;
+    if (task?.workspace_id) {
+      const workspace = db.prepare('SELECT github_repo FROM workspaces WHERE id = ?').get(task.workspace_id) as Workspace | undefined;
+      githubRepo = workspace?.github_repo || null;
+    }
 
     const deliverables = db.prepare(`
       SELECT *
@@ -29,7 +45,19 @@ export async function GET(
       ORDER BY created_at DESC
     `).all(taskId) as TaskDeliverable[];
 
-    return NextResponse.json(deliverables);
+    // Transform commit paths to full GitHub URLs
+    const transformed = deliverables.map(d => {
+      if (d.deliverable_type === 'commit' && d.path && githubRepo && !d.path.startsWith('http')) {
+        return {
+          ...d,
+          path: `${githubRepo}/commit/${d.path}`,
+          _original_path: d.path, // Keep original for reference
+        };
+      }
+      return d;
+    });
+
+    return NextResponse.json(transformed);
   } catch (error) {
     console.error('Error fetching deliverables:', error);
     return NextResponse.json(
@@ -45,10 +73,10 @@ export async function GET(
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const taskId = params.id;
+    const { id: taskId } = await params;
     const body = await request.json();
     
     const { deliverable_type, title, path, description } = body;

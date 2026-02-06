@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { broadcast } from '@/lib/events';
+import { getOpenClawClient } from '@/lib/openclaw/client';
 
 /**
  * POST /api/tasks/[id]/subagent
@@ -13,10 +14,10 @@ import { broadcast } from '@/lib/events';
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const taskId = params.id;
+    const { id: taskId } = await params;
     const body = await request.json();
     
     const { openclaw_session_id, agent_name } = body;
@@ -37,7 +38,7 @@ export async function POST(
     
     if (agent_name) {
       // Check if agent already exists
-      const existingAgent = db.prepare('SELECT id FROM agents WHERE name = ?').get(agent_name) as any;
+      const existingAgent = db.prepare('SELECT id FROM agents WHERE name = ?').get(agent_name) as { id: string } | undefined;
       
       if (existingAgent) {
         agentId = existingAgent.id;
@@ -96,19 +97,47 @@ export async function POST(
   }
 }
 
+interface OpenClawLiveSession {
+  key: string;
+  sessionId: string;
+  label?: string;
+  displayName?: string;
+  channel?: string;
+  updatedAt: number;
+  totalTokens: number;
+  model?: string;
+  abortedLastRun?: boolean;
+}
+
+interface DbSession {
+  id: string;
+  agent_id: string | null;
+  openclaw_session_id: string;
+  channel: string | null;
+  status: string;
+  session_type: string;
+  task_id: string | null;
+  ended_at: string | null;
+  created_at: string;
+  updated_at: string;
+  agent_name?: string;
+  agent_avatar_emoji?: string;
+}
+
 /**
  * GET /api/tasks/[id]/subagent
- * Get all sub-agent sessions for a task
+ * Get all sub-agent sessions for a task (from DB + live from OpenClaw)
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const taskId = params.id;
+    const { id: taskId } = await params;
     const db = getDb();
 
-    const sessions = db.prepare(`
+    // Get sessions registered in DB for this task
+    const dbSessions = db.prepare(`
       SELECT 
         s.*,
         a.name as agent_name,
@@ -117,9 +146,63 @@ export async function GET(
       LEFT JOIN agents a ON s.agent_id = a.id
       WHERE s.task_id = ? AND s.session_type = 'subagent'
       ORDER BY s.created_at DESC
-    `).all(taskId);
+    `).all(taskId) as DbSession[];
 
-    return NextResponse.json(sessions);
+    // Also try to get live sessions from OpenClaw Gateway
+    let liveSessions: OpenClawLiveSession[] = [];
+    try {
+      const client = getOpenClawClient();
+      if (!client.isConnected()) {
+        await client.connect();
+      }
+      const allSessions = await client.listSessions() as OpenClawLiveSession[];
+      // Filter to only subagent sessions
+      liveSessions = allSessions.filter((s: OpenClawLiveSession) => 
+        s.key?.includes(':subagent:')
+      );
+    } catch (e) {
+      console.warn('Could not fetch live OpenClaw sessions:', e);
+    }
+
+    // Merge: add live sessions that aren't already in DB results
+    const dbSessionKeys = new Set(dbSessions.map(s => s.openclaw_session_id));
+    
+    const mergedSessions = [...dbSessions];
+    
+    for (const live of liveSessions) {
+      if (!dbSessionKeys.has(live.key) && !dbSessionKeys.has(live.sessionId)) {
+        // Convert live session to our format
+        // Extract agent name from session key (e.g., "agent:code-reviewer:subagent:xxx")
+        const keyParts = live.key?.split(':') || [];
+        const agentName = keyParts[1] || 'Unknown Agent';
+        
+        mergedSessions.push({
+          id: live.sessionId || live.key,
+          agent_id: null,
+          openclaw_session_id: live.key,
+          channel: live.channel || null,
+          status: live.abortedLastRun ? 'failed' : 'active',
+          session_type: 'subagent',
+          task_id: null, // Live sessions don't have task association
+          ended_at: null,
+          created_at: new Date(live.updatedAt).toISOString(),
+          updated_at: new Date(live.updatedAt).toISOString(),
+          agent_name: agentName,
+          agent_avatar_emoji: '🤖',
+          // Extra fields for live sessions
+          // @ts-expect-error - adding extra fields for live sessions
+          _live: true,
+          // @ts-expect-error - adding extra fields for live sessions
+          _label: live.label,
+          // @ts-expect-error - adding extra fields for live sessions
+          _totalTokens: live.totalTokens,
+          // @ts-expect-error - adding extra fields for live sessions
+          _model: live.model,
+        });
+      }
+    }
+
+    return NextResponse.json(mergedSessions);
   } catch (error) {
     console.error('Error fetching sub-agents:', error);
     return NextResponse.json(

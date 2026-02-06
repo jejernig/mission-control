@@ -5,6 +5,7 @@ import { Plus, ChevronRight, Zap, ZapOff, Loader2 } from 'lucide-react';
 import { useMissionControl } from '@/lib/store';
 import type { Agent, AgentStatus, OpenClawSession } from '@/lib/types';
 import { AgentModal } from './AgentModal';
+import { GlobalSessionsPanel } from './GlobalSessionsPanel';
 
 type FilterTab = 'all' | 'working' | 'standby';
 
@@ -19,6 +20,7 @@ export function AgentsSidebar({ workspaceId }: AgentsSidebarProps) {
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [connectingAgentId, setConnectingAgentId] = useState<string | null>(null);
   const [activeSubAgents, setActiveSubAgents] = useState(0);
+  const [showSessionsPanel, setShowSessionsPanel] = useState(false);
 
   // Load OpenClaw session status for all agents on mount
   useEffect(() => {
@@ -123,16 +125,31 @@ export function AgentsSidebar({ workspaceId }: AgentsSidebarProps) {
           </div>
         </div>
 
-        {/* Active Sub-Agents Counter */}
-        {activeSubAgents > 0 && (
-          <div className="mb-3 px-3 py-2 bg-green-500/10 border border-green-500/20 rounded-lg">
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-green-400">●</span>
-              <span className="text-mc-text">Active Sub-Agents:</span>
-              <span className="font-bold text-green-400">{activeSubAgents}</span>
-            </div>
+        {/* Active Sub-Agents Counter - Always visible, clickable */}
+        <button
+          onClick={() => setShowSessionsPanel(true)}
+          className={`mb-3 w-full px-3 py-2 border rounded-lg transition-colors text-left ${
+            activeSubAgents > 0 
+              ? 'bg-green-500/10 border-green-500/20 hover:bg-green-500/20' 
+              : 'bg-mc-bg border-mc-border hover:bg-mc-bg-tertiary'
+          }`}
+        >
+          <div className="flex items-center gap-2 text-sm">
+            {activeSubAgents > 0 ? (
+              <>
+                <span className="text-green-400 animate-pulse">●</span>
+                <span className="text-mc-text">Active Sub-Agents:</span>
+                <span className="font-bold text-green-400">{activeSubAgents}</span>
+              </>
+            ) : (
+              <>
+                <span className="text-mc-text-secondary">○</span>
+                <span className="text-mc-text-secondary">Sub-Agent Sessions</span>
+              </>
+            )}
+            <span className="text-xs text-mc-text-secondary ml-auto">View →</span>
           </div>
-        )}
+        </button>
 
         {/* Filter Tabs */}
         <div className="flex gap-1">
@@ -260,6 +277,9 @@ export function AgentsSidebar({ workspaceId }: AgentsSidebarProps) {
           onClose={() => setEditingAgent(null)}
           workspaceId={workspaceId}
         />
+      )}
+      {showSessionsPanel && (
+        <GlobalSessionsPanel onClose={() => setShowSessionsPanel(false)} />
       )}
     </aside>
   );

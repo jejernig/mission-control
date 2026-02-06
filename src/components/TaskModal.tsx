@@ -1,16 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Save, Trash2, Activity, Package, Bot, ClipboardList, Plus } from 'lucide-react';
+import { X, Save, Trash2, Activity, Package, Bot, ClipboardList, Plus, GitBranch, CheckSquare } from 'lucide-react';
 import { useMissionControl } from '@/lib/store';
 import { ActivityLog } from './ActivityLog';
 import { DeliverablesList } from './DeliverablesList';
 import { SessionsList } from './SessionsList';
 import { PlanningTab } from './PlanningTab';
+import { TaskArchitectureTab } from './TaskArchitectureTab';
+import { TaskReviewsTab } from './TaskReviewsTab';
 import { AgentModal } from './AgentModal';
 import type { Task, TaskPriority, TaskStatus } from '@/lib/types';
 
-type TabType = 'overview' | 'planning' | 'activity' | 'deliverables' | 'sessions';
+type TabType = 'overview' | 'planning' | 'architecture' | 'reviews' | 'activity' | 'deliverables' | 'sessions';
 
 interface TaskModalProps {
   task?: Task;
@@ -125,6 +127,8 @@ export function TaskModal({ task, onClose, workspaceId }: TaskModalProps) {
   const tabs = [
     { id: 'overview' as TabType, label: 'Overview', icon: null },
     { id: 'planning' as TabType, label: 'Planning', icon: <ClipboardList className="w-4 h-4" /> },
+    { id: 'architecture' as TabType, label: 'Architecture', icon: <GitBranch className="w-4 h-4" /> },
+    { id: 'reviews' as TabType, label: 'Reviews', icon: <CheckSquare className="w-4 h-4" /> },
     { id: 'activity' as TabType, label: 'Activity', icon: <Activity className="w-4 h-4" /> },
     { id: 'deliverables' as TabType, label: 'Deliverables', icon: <Package className="w-4 h-4" /> },
     { id: 'sessions' as TabType, label: 'Sessions', icon: <Bot className="w-4 h-4" /> },
@@ -303,6 +307,16 @@ export function TaskModal({ task, onClose, workspaceId }: TaskModalProps) {
                 window.location.reload();
               }}
             />
+          )}
+
+          {/* Architecture Tab */}
+          {activeTab === 'architecture' && task && (
+            <TaskArchitectureTab task={task} />
+          )}
+
+          {/* Reviews Tab */}
+          {activeTab === 'reviews' && task && (
+            <TaskReviewsTab taskId={task.id} />
           )}
 
           {/* Activity Tab */}

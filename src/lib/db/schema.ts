@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
   slug TEXT NOT NULL UNIQUE,
   description TEXT,
   icon TEXT DEFAULT '📁',
+  github_repo TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
@@ -161,6 +162,34 @@ CREATE TABLE IF NOT EXISTS task_deliverables (
   description TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
+
+-- Archived tasks table (done tasks moved here after N days)
+CREATE TABLE IF NOT EXISTS tasks_archive (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  status TEXT DEFAULT 'done',
+  priority TEXT,
+  assigned_agent_id TEXT,
+  created_by_agent_id TEXT,
+  workspace_id TEXT,
+  business_id TEXT,
+  due_date TEXT,
+  created_at TEXT,
+  updated_at TEXT,
+  archived_at TEXT DEFAULT (datetime('now')),
+  planning_session_key TEXT,
+  planning_messages TEXT,
+  planning_complete INTEGER,
+  planning_spec TEXT,
+  planning_agents TEXT,
+  -- Store deliverables and activities as JSON for archival
+  deliverables_json TEXT,
+  activities_json TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_tasks_archive_workspace ON tasks_archive(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_archive_archived ON tasks_archive(archived_at);
 
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);

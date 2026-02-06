@@ -151,6 +151,140 @@ const migrations: Migration[] = [
         console.log('[Migration 004] Added planning_agents');
       }
     }
+  },
+  {
+    id: '005',
+    name: 'add_github_repo_to_workspaces',
+    up: (db) => {
+      console.log('[Migration 005] Adding github_repo to workspaces...');
+      const columns = db.prepare("PRAGMA table_info(workspaces)").all() as { name: string }[];
+      if (!columns.some(c => c.name === 'github_repo')) {
+        db.exec("ALTER TABLE workspaces ADD COLUMN github_repo TEXT");
+        console.log('[Migration 005] Added github_repo column');
+      }
+    }
+  },
+  {
+    id: '007',
+    name: 'add_workspace_hierarchy',
+    up: (db) => {
+      console.log('[Migration 007] Adding workspace hierarchy (parent_id)...');
+      
+      // Add parent_id column to workspaces
+      const columns = db.prepare("PRAGMA table_info(workspaces)").all() as { name: string }[];
+      if (!columns.some(c => c.name === 'parent_id')) {
+        db.exec("ALTER TABLE workspaces ADD COLUMN parent_id TEXT REFERENCES workspaces(id)");
+        console.log('[Migration 007] Added parent_id column');
+      }
+      
+      // Note: Parent workspaces (orgs) are created manually via API
+      // Existing workspaces remain as top-level until assigned a parent
+      console.log('[Migration 007] Hierarchy support added - create org workspaces via UI');
+    }
+  },
+  {
+    id: '006',
+    name: 'add_tasks_archive_table',
+    up: (db) => {
+      console.log('[Migration 006] Creating tasks_archive table...');
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS tasks_archive (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          description TEXT,
+          status TEXT DEFAULT 'done',
+          priority TEXT,
+          assigned_agent_id TEXT,
+          created_by_agent_id TEXT,
+          workspace_id TEXT,
+          business_id TEXT,
+          due_date TEXT,
+          created_at TEXT,
+          updated_at TEXT,
+          archived_at TEXT DEFAULT (datetime('now')),
+          planning_session_key TEXT,
+          planning_messages TEXT,
+          planning_complete INTEGER,
+          planning_spec TEXT,
+          planning_agents TEXT,
+          deliverables_json TEXT,
+          activities_json TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_tasks_archive_workspace ON tasks_archive(workspace_id);
+        CREATE INDEX IF NOT EXISTS idx_tasks_archive_archived ON tasks_archive(archived_at);
+      `);
+      console.log('[Migration 006] Created tasks_archive table');
+    }
+  },
+  {
+    id: '008',
+    name: 'add_task_reviews',
+    up: (db) => {
+      console.log('[Migration 008] Creating task_reviews table for parallel reviews...');
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS task_reviews (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+          review_type TEXT NOT NULL CHECK (review_type IN ('uat', 'security', 'quality', 'gap')),
+          status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'passed', 'failed')),
+          reviewer_agent_id TEXT REFERENCES agents(id),
+          notes TEXT,
+          reviewed_at TEXT,
+          created_at TEXT DEFAULT (datetime('now')),
+          UNIQUE(task_id, review_type)
+        );
+        CREATE INDEX IF NOT EXISTS idx_task_reviews_task ON task_reviews(task_id);
+        CREATE INDEX IF NOT EXISTS idx_task_reviews_status ON task_reviews(task_id, status);
+      `);
+      console.log('[Migration 008] Created task_reviews table');
+    }
+  },
+  {
+    id: '009',
+    name: 'add_commit_pr_review_types',
+    up: (db) => {
+      console.log('[Migration 009] Adding commit and pr review types...');
+      // SQLite doesn't support ALTER CHECK constraint, so we recreate the table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS task_reviews_new (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+          review_type TEXT NOT NULL CHECK (review_type IN ('uat', 'security', 'quality', 'gap', 'commit', 'pr')),
+          status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'passed', 'failed', 'skipped')),
+          reviewer_agent_id TEXT REFERENCES agents(id),
+          notes TEXT,
+          reviewed_at TEXT,
+          created_at TEXT DEFAULT (datetime('now')),
+          UNIQUE(task_id, review_type)
+        );
+        
+        INSERT OR IGNORE INTO task_reviews_new SELECT * FROM task_reviews;
+        DROP TABLE IF EXISTS task_reviews;
+        ALTER TABLE task_reviews_new RENAME TO task_reviews;
+        
+        CREATE INDEX IF NOT EXISTS idx_task_reviews_task ON task_reviews(task_id);
+        CREATE INDEX IF NOT EXISTS idx_task_reviews_status ON task_reviews(task_id, status);
+      `);
+      console.log('[Migration 009] Added commit and pr review types');
+    }
+  },
+  {
+    id: '010',
+    name: 'add_task_hierarchy',
+    up: (db) => {
+      console.log('[Migration 010] Adding task hierarchy (parent_task_id)...');
+      
+      const columns = db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[];
+      if (!columns.some(c => c.name === 'parent_task_id')) {
+        db.exec("ALTER TABLE tasks ADD COLUMN parent_task_id TEXT REFERENCES tasks(id)");
+        db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id)");
+        console.log('[Migration 010] Added parent_task_id column');
+      }
+      
+      // Parent tasks can only progress when all children are done
+      // This is enforced in application logic, not DB constraints
+      console.log('[Migration 010] Task hierarchy support added');
+    }
   }
 ];
 

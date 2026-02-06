@@ -56,6 +56,7 @@ export async function GET(request: NextRequest) {
           name: workspace.name,
           slug: workspace.slug,
           icon: workspace.icon,
+          parent_id: (workspace as { parent_id?: string }).parent_id || null,
           taskCounts: counts,
           agentCount: agentCount.count
         };
@@ -64,7 +65,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(stats);
     }
     
-    const workspaces = db.prepare('SELECT * FROM workspaces ORDER BY name').all();
+    // Order: parent workspaces first (parent_id IS NULL), then children alphabetically
+    const workspaces = db.prepare(`
+      SELECT * FROM workspaces 
+      ORDER BY 
+        CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END,
+        name
+    `).all();
     return NextResponse.json(workspaces);
   } catch (error) {
     console.error('Failed to fetch workspaces:', error);
@@ -76,7 +83,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, description, icon } = body;
+    const { name, description, icon, parent_id } = body;
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
@@ -93,9 +100,9 @@ export async function POST(request: NextRequest) {
     }
 
     db.prepare(`
-      INSERT INTO workspaces (id, name, slug, description, icon)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(id, name.trim(), slug, description || null, icon || '📁');
+      INSERT INTO workspaces (id, name, slug, description, icon, parent_id)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, name.trim(), slug, description || null, icon || '📁', parent_id || null);
 
     const workspace = db.prepare('SELECT * FROM workspaces WHERE id = ?').get(id);
     return NextResponse.json(workspace, { status: 201 });

@@ -1,0 +1,875 @@
+From f000fd1bf34a1a216a5452f8f3c8d3a7b7755ff4 Mon Sep 17 00:00:00 2001
+From: Eric Jernigan <jejernig@users.noreply.github.com>
+Date: Wed, 4 Feb 2026 19:55:08 +0000
+Subject: [PATCH] feat: Fix Sessions tab - show live OpenClaw sessions
+
+- Update /api/tasks/[id]/subagent endpoint to also query OpenClaw Gateway
+  for live sub-agent sessions and merge with database results
+- Update SessionsList component to show live sessions with extra metadata
+  (label, tokens, model) alongside registered sessions
+- Add GlobalSessionsPanel component for viewing all active sub-agent sessions
+- Make Active Sub-Agents counter in sidebar always visible and clickable
+  to open the global sessions panel
+- Auto-refresh sessions every 10-15 seconds for real-time updates
+---
+ src/app/api/tasks/[id]/subagent/route.ts | 101 ++++++-
+ src/components/AgentsSidebar.tsx         |  38 ++-
+ src/components/GlobalSessionsPanel.tsx   | 221 +++++++++++++++
+ src/components/SessionsList.tsx          | 331 ++++++++++++++++++-----
+ 4 files changed, 599 insertions(+), 92 deletions(-)
+ create mode 100644 src/components/GlobalSessionsPanel.tsx
+
+diff --git a/src/app/api/tasks/[id]/subagent/route.ts b/src/app/api/tasks/[id]/subagent/route.ts
+index e933be5..bdfbf1d 100644
+--- a/src/app/api/tasks/[id]/subagent/route.ts
++++ b/src/app/api/tasks/[id]/subagent/route.ts
+@@ -6,6 +6,7 @@
+ import { NextRequest, NextResponse } from 'next/server';
+ import { getDb } from '@/lib/db';
+ import { broadcast } from '@/lib/events';
++import { getOpenClawClient } from '@/lib/openclaw/client';
+ 
+ /**
+  * POST /api/tasks/[id]/subagent
+@@ -13,10 +14,10 @@ import { broadcast } from '@/lib/events';
+  */
+ export async function POST(
+   request: NextRequest,
+-  { params }: { params: { id: string } }
++  { params }: { params: Promise<{ id: string }> }
+ ) {
+   try {
+-    const taskId = params.id;
++    const { id: taskId } = await params;
+     const body = await request.json();
+     
+     const { openclaw_session_id, agent_name } = body;
+@@ -37,7 +38,7 @@ export async function POST(
+     
+     if (agent_name) {
+       // Check if agent already exists
+-      const existingAgent = db.prepare('SELECT id FROM agents WHERE name = ?').get(agent_name) as any;
++      const existingAgent = db.prepare('SELECT id FROM agents WHERE name = ?').get(agent_name) as { id: string } | undefined;
+       
+       if (existingAgent) {
+         agentId = existingAgent.id;
+@@ -96,19 +97,47 @@ export async function POST(
+   }
+ }
+ 
++interface OpenClawLiveSession {
++  key: string;
++  sessionId: string;
++  label?: string;
++  displayName?: string;
++  channel?: string;
++  updatedAt: number;
++  totalTokens: number;
++  model?: string;
++  abortedLastRun?: boolean;
++}
++
++interface DbSession {
++  id: string;
++  agent_id: string | null;
++  openclaw_session_id: string;
++  channel: string | null;
++  status: string;
++  session_type: string;
++  task_id: string | null;
++  ended_at: string | null;
++  created_at: string;
++  updated_at: string;
++  agent_name?: string;
++  agent_avatar_emoji?: string;
++}
++
+ /**
+  * GET /api/tasks/[id]/subagent
+- * Get all sub-agent sessions for a task
++ * Get all sub-agent sessions for a task (from DB + live from OpenClaw)
+  */
+ export async function GET(
+   request: NextRequest,
+-  { params }: { params: { id: string } }
++  { params }: { params: Promise<{ id: string }> }
+ ) {
+   try {
+-    const taskId = params.id;
++    const { id: taskId } = await params;
+     const db = getDb();
+ 
+-    const sessions = db.prepare(`
++    // Get sessions registered in DB for this task
++    const dbSessions = db.prepare(`
+       SELECT 
+         s.*,
+         a.name as agent_name,
+@@ -117,9 +146,63 @@ export async function GET(
+       LEFT JOIN agents a ON s.agent_id = a.id
+       WHERE s.task_id = ? AND s.session_type = 'subagent'
+       ORDER BY s.created_at DESC
+-    `).all(taskId);
++    `).all(taskId) as DbSession[];
++
++    // Also try to get live sessions from OpenClaw Gateway
++    let liveSessions: OpenClawLiveSession[] = [];
++    try {
++      const client = getOpenClawClient();
++      if (!client.isConnected()) {
++        await client.connect();
++      }
++      const allSessions = await client.listSessions() as OpenClawLiveSession[];
++      // Filter to only subagent sessions
++      liveSessions = allSessions.filter((s: OpenClawLiveSession) => 
++        s.key?.includes(':subagent:')
++      );
++    } catch (e) {
++      console.warn('Could not fetch live OpenClaw sessions:', e);
++    }
++
++    // Merge: add live sessions that aren't already in DB results
++    const dbSessionKeys = new Set(dbSessions.map(s => s.openclaw_session_id));
++    
++    const mergedSessions = [...dbSessions];
++    
++    for (const live of liveSessions) {
++      if (!dbSessionKeys.has(live.key) && !dbSessionKeys.has(live.sessionId)) {
++        // Convert live session to our format
++        // Extract agent name from session key (e.g., "agent:code-reviewer:subagent:xxx")
++        const keyParts = live.key?.split(':') || [];
++        const agentName = keyParts[1] || 'Unknown Agent';
++        
++        mergedSessions.push({
++          id: live.sessionId || live.key,
++          agent_id: null,
++          openclaw_session_id: live.key,
++          channel: live.channel || null,
++          status: live.abortedLastRun ? 'failed' : 'active',
++          session_type: 'subagent',
++          task_id: null, // Live sessions don't have task association
++          ended_at: null,
++          created_at: new Date(live.updatedAt).toISOString(),
++          updated_at: new Date(live.updatedAt).toISOString(),
++          agent_name: agentName,
++          agent_avatar_emoji: '🤖',
++          // Extra fields for live sessions
++          // @ts-expect-error - adding extra fields for live sessions
++          _live: true,
++          // @ts-expect-error - adding extra fields for live sessions
++          _label: live.label,
++          // @ts-expect-error - adding extra fields for live sessions
++          _totalTokens: live.totalTokens,
++          // @ts-expect-error - adding extra fields for live sessions
++          _model: live.model,
++        });
++      }
++    }
+ 
+-    return NextResponse.json(sessions);
++    return NextResponse.json(mergedSessions);
+   } catch (error) {
+     console.error('Error fetching sub-agents:', error);
+     return NextResponse.json(
+diff --git a/src/components/AgentsSidebar.tsx b/src/components/AgentsSidebar.tsx
+index 71ee518..a50a5f3 100644
+--- a/src/components/AgentsSidebar.tsx
++++ b/src/components/AgentsSidebar.tsx
+@@ -5,6 +5,7 @@ import { Plus, ChevronRight, Zap, ZapOff, Loader2 } from 'lucide-react';
+ import { useMissionControl } from '@/lib/store';
+ import type { Agent, AgentStatus, OpenClawSession } from '@/lib/types';
+ import { AgentModal } from './AgentModal';
++import { GlobalSessionsPanel } from './GlobalSessionsPanel';
+ 
+ type FilterTab = 'all' | 'working' | 'standby';
+ 
+@@ -19,6 +20,7 @@ export function AgentsSidebar({ workspaceId }: AgentsSidebarProps) {
+   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
+   const [connectingAgentId, setConnectingAgentId] = useState<string | null>(null);
+   const [activeSubAgents, setActiveSubAgents] = useState(0);
++  const [showSessionsPanel, setShowSessionsPanel] = useState(false);
+ 
+   // Load OpenClaw session status for all agents on mount
+   useEffect(() => {
+@@ -123,16 +125,31 @@ export function AgentsSidebar({ workspaceId }: AgentsSidebarProps) {
+           </div>
+         </div>
+ 
+-        {/* Active Sub-Agents Counter */}
+-        {activeSubAgents > 0 && (
+-          <div className="mb-3 px-3 py-2 bg-green-500/10 border border-green-500/20 rounded-lg">
+-            <div className="flex items-center gap-2 text-sm">
+-              <span className="text-green-400">●</span>
+-              <span className="text-mc-text">Active Sub-Agents:</span>
+-              <span className="font-bold text-green-400">{activeSubAgents}</span>
+-            </div>
++        {/* Active Sub-Agents Counter - Always visible, clickable */}
++        <button
++          onClick={() => setShowSessionsPanel(true)}
++          className={`mb-3 w-full px-3 py-2 border rounded-lg transition-colors text-left ${
++            activeSubAgents > 0 
++              ? 'bg-green-500/10 border-green-500/20 hover:bg-green-500/20' 
++              : 'bg-mc-bg border-mc-border hover:bg-mc-bg-tertiary'
++          }`}
++        >
++          <div className="flex items-center gap-2 text-sm">
++            {activeSubAgents > 0 ? (
++              <>
++                <span className="text-green-400 animate-pulse">●</span>
++                <span className="text-mc-text">Active Sub-Agents:</span>
++                <span className="font-bold text-green-400">{activeSubAgents}</span>
++              </>
++            ) : (
++              <>
++                <span className="text-mc-text-secondary">○</span>
++                <span className="text-mc-text-secondary">Sub-Agent Sessions</span>
++              </>
++            )}
++            <span className="text-xs text-mc-text-secondary ml-auto">View →</span>
+           </div>
+-        )}
++        </button>
+ 
+         {/* Filter Tabs */}
+         <div className="flex gap-1">
+@@ -261,6 +278,9 @@ export function AgentsSidebar({ workspaceId }: AgentsSidebarProps) {
+           workspaceId={workspaceId}
+         />
+       )}
++      {showSessionsPanel && (
++        <GlobalSessionsPanel onClose={() => setShowSessionsPanel(false)} />
++      )}
+     </aside>
+   );
+ }
+diff --git a/src/components/GlobalSessionsPanel.tsx b/src/components/GlobalSessionsPanel.tsx
+new file mode 100644
+index 0000000..16fdf9d
+--- /dev/null
++++ b/src/components/GlobalSessionsPanel.tsx
+@@ -0,0 +1,221 @@
++/**
++ * GlobalSessionsPanel Component
++ * Shows all live OpenClaw sub-agent sessions across the system
++ */
++
++'use client';
++
++import { useEffect, useState, useCallback } from 'react';
++import { X, RefreshCw, Zap, Bot, Circle, XCircle } from 'lucide-react';
++
++interface LiveSession {
++  key: string;
++  sessionId: string;
++  label?: string;
++  displayName?: string;
++  channel?: string;
++  updatedAt: number;
++  totalTokens: number;
++  model?: string;
++  abortedLastRun?: boolean;
++}
++
++interface GlobalSessionsPanelProps {
++  onClose: () => void;
++}
++
++export function GlobalSessionsPanel({ onClose }: GlobalSessionsPanelProps) {
++  const [sessions, setSessions] = useState<LiveSession[]>([]);
++  const [loading, setLoading] = useState(true);
++  const [refreshing, setRefreshing] = useState(false);
++
++  const loadSessions = useCallback(async () => {
++    try {
++      const res = await fetch('/api/openclaw/sessions');
++      if (res.ok) {
++        const data = await res.json();
++        const allSessions = data.sessions?.sessions || data.sessions || [];
++        // Filter to only subagent sessions and sort by most recent
++        const subagentSessions = allSessions
++          .filter((s: LiveSession) => s.key?.includes(':subagent:'))
++          .sort((a: LiveSession, b: LiveSession) => b.updatedAt - a.updatedAt);
++        setSessions(subagentSessions);
++      }
++    } catch (error) {
++      console.error('Failed to load sessions:', error);
++    } finally {
++      setLoading(false);
++      setRefreshing(false);
++    }
++  }, []);
++
++  useEffect(() => {
++    loadSessions();
++    // Auto-refresh every 10 seconds
++    const interval = setInterval(loadSessions, 10000);
++    return () => clearInterval(interval);
++  }, [loadSessions]);
++
++  const handleRefresh = () => {
++    setRefreshing(true);
++    loadSessions();
++  };
++
++  const formatDuration = (updatedAt: number) => {
++    const now = Date.now();
++    const duration = now - updatedAt;
++    const seconds = Math.floor(duration / 1000);
++    const minutes = Math.floor(seconds / 60);
++    const hours = Math.floor(minutes / 60);
++
++    if (hours > 0) {
++      return `${hours}h ${minutes % 60}m ago`;
++    } else if (minutes > 0) {
++      return `${minutes}m ago`;
++    } else {
++      return 'just now';
++    }
++  };
++
++  const formatTokens = (tokens: number) => {
++    if (tokens >= 1000000) {
++      return `${(tokens / 1000000).toFixed(1)}M`;
++    } else if (tokens >= 1000) {
++      return `${(tokens / 1000).toFixed(1)}K`;
++    }
++    return tokens.toString();
++  };
++
++  const parseSessionKey = (key: string) => {
++    // e.g., "agent:code-reviewer:subagent:f48019c1-..."
++    const parts = key.split(':');
++    return {
++      agentName: parts[1] || 'Unknown',
++      sessionId: parts[3] || key,
++    };
++  };
++
++  return (
++    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
++      <div className="bg-mc-bg-secondary border border-mc-border rounded-lg w-full max-w-3xl max-h-[80vh] flex flex-col">
++        {/* Header */}
++        <div className="flex items-center justify-between p-4 border-b border-mc-border">
++          <div className="flex items-center gap-3">
++            <Zap className="w-5 h-5 text-yellow-500" />
++            <h2 className="text-lg font-semibold">Live Sub-Agent Sessions</h2>
++            <span className="bg-yellow-500/20 text-yellow-400 text-xs px-2 py-0.5 rounded">
++              {sessions.length} active
++            </span>
++          </div>
++          <div className="flex items-center gap-2">
++            <button
++              onClick={handleRefresh}
++              disabled={refreshing}
++              className="p-2 hover:bg-mc-bg-tertiary rounded disabled:opacity-50"
++              title="Refresh"
++            >
++              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
++            </button>
++            <button
++              onClick={onClose}
++              className="p-2 hover:bg-mc-bg-tertiary rounded"
++            >
++              <X className="w-5 h-5" />
++            </button>
++          </div>
++        </div>
++
++        {/* Content */}
++        <div className="flex-1 overflow-y-auto p-4">
++          {loading ? (
++            <div className="flex items-center justify-center py-8">
++              <div className="text-mc-text-secondary">Loading sessions...</div>
++            </div>
++          ) : sessions.length === 0 ? (
++            <div className="flex flex-col items-center justify-center py-12 text-mc-text-secondary">
++              <Bot className="w-12 h-12 mb-4 opacity-50" />
++              <p className="text-lg">No active sub-agent sessions</p>
++              <p className="text-sm mt-1">Sessions will appear here when agents spawn sub-agents</p>
++            </div>
++          ) : (
++            <div className="space-y-3">
++              {sessions.map((session) => {
++                const { agentName } = parseSessionKey(session.key);
++                const isRecent = Date.now() - session.updatedAt < 60000; // Active in last minute
++                
++                return (
++                  <div
++                    key={session.sessionId || session.key}
++                    className={`p-4 rounded-lg border ${
++                      isRecent 
++                        ? 'bg-green-500/5 border-green-500/30' 
++                        : session.abortedLastRun 
++                          ? 'bg-red-500/5 border-red-500/30'
++                          : 'bg-mc-bg border-mc-border'
++                    }`}
++                  >
++                    <div className="flex items-start justify-between">
++                      <div className="flex items-center gap-3">
++                        <div className="text-2xl">🤖</div>
++                        <div>
++                          <div className="flex items-center gap-2">
++                            {isRecent ? (
++                              <Circle className="w-3 h-3 text-green-500 fill-current animate-pulse" />
++                            ) : session.abortedLastRun ? (
++                              <XCircle className="w-3 h-3 text-red-500" />
++                            ) : (
++                              <Circle className="w-3 h-3 text-yellow-500" />
++                            )}
++                            <span className="font-medium">{agentName}</span>
++                            {session.label && (
++                              <span className="text-xs bg-mc-accent/20 text-mc-accent px-2 py-0.5 rounded">
++                                {session.label}
++                              </span>
++                            )}
++                          </div>
++                          <div className="text-xs text-mc-text-secondary font-mono mt-1 truncate max-w-md">
++                            {session.key}
++                          </div>
++                        </div>
++                      </div>
++                      <div className="text-right text-sm">
++                        <div className="text-mc-text-secondary">
++                          {formatDuration(session.updatedAt)}
++                        </div>
++                        {session.abortedLastRun && (
++                          <div className="text-red-400 text-xs">aborted</div>
++                        )}
++                      </div>
++                    </div>
++
++                    {/* Stats */}
++                    <div className="flex items-center gap-4 mt-3 text-xs text-mc-text-secondary">
++                      <span className="flex items-center gap-1">
++                        📊 {formatTokens(session.totalTokens)} tokens
++                      </span>
++                      {session.model && (
++                        <span className="flex items-center gap-1">
++                          🧠 {session.model.replace('claude-', '').replace('anthropic/', '')}
++                        </span>
++                      )}
++                      {session.channel && (
++                        <span className="flex items-center gap-1">
++                          📡 {session.channel}
++                        </span>
++                      )}
++                    </div>
++                  </div>
++                );
++              })}
++            </div>
++          )}
++        </div>
++
++        {/* Footer */}
++        <div className="p-4 border-t border-mc-border text-xs text-mc-text-secondary">
++          Sessions refresh automatically every 10 seconds. Data sourced from OpenClaw Gateway.
++        </div>
++      </div>
++    </div>
++  );
++}
+diff --git a/src/components/SessionsList.tsx b/src/components/SessionsList.tsx
+index bf6b4ef..9a90ad3 100644
+--- a/src/components/SessionsList.tsx
++++ b/src/components/SessionsList.tsx
+@@ -1,12 +1,13 @@
+ /**
+  * SessionsList Component
+  * Displays OpenClaw sub-agent sessions for a task
++ * Shows both registered sessions and live sessions from OpenClaw Gateway
+  */
+ 
+ 'use client';
+ 
+-import { useEffect, useState } from 'react';
+-import { Bot, CheckCircle, Circle, XCircle, Trash2, Check } from 'lucide-react';
++import { useEffect, useState, useCallback } from 'react';
++import { Bot, CheckCircle, Circle, XCircle, Trash2, Check, Zap, RefreshCw } from 'lucide-react';
+ 
+ interface SessionWithAgent {
+   id: string;
+@@ -21,35 +22,90 @@ interface SessionWithAgent {
+   updated_at: string;
+   agent_name?: string;
+   agent_avatar_emoji?: string;
++  // Extra fields for live sessions
++  _live?: boolean;
++  _label?: string;
++  _totalTokens?: number;
++  _model?: string;
+ }
+ 
+ interface SessionsListProps {
+-  taskId: string;
++  taskId?: string; // Optional - if not provided, show all sessions
+ }
+ 
+ export function SessionsList({ taskId }: SessionsListProps) {
+   const [sessions, setSessions] = useState<SessionWithAgent[]>([]);
+   const [loading, setLoading] = useState(true);
++  const [refreshing, setRefreshing] = useState(false);
+ 
+-  useEffect(() => {
+-    loadSessions();
+-  }, [taskId]);
+-
+-  const loadSessions = async () => {
++  const loadSessions = useCallback(async () => {
+     try {
+-      const res = await fetch(`/api/tasks/${taskId}/subagent`);
++      // If taskId provided, fetch for that task; otherwise fetch all live sessions
++      const url = taskId 
++        ? `/api/tasks/${taskId}/subagent`
++        : '/api/openclaw/sessions';
++      
++      const res = await fetch(url);
+       if (res.ok) {
+         const data = await res.json();
+-        setSessions(data);
++        // Handle both array and { sessions: [] } formats
++        const sessionsList = Array.isArray(data) ? data : (data.sessions || []);
++        
++        // If fetching from /api/openclaw/sessions, filter to subagents and transform
++        if (!taskId && Array.isArray(sessionsList)) {
++          const subagentSessions = sessionsList
++            .filter((s: { key?: string }) => s.key?.includes(':subagent:'))
++            .map((s: { key: string; sessionId: string; label?: string; channel?: string; updatedAt: number; totalTokens?: number; model?: string; abortedLastRun?: boolean }) => {
++              const keyParts = s.key?.split(':') || [];
++              const agentName = keyParts[1] || 'Unknown';
++              return {
++                id: s.sessionId || s.key,
++                agent_id: null,
++                openclaw_session_id: s.key,
++                channel: s.channel || null,
++                status: s.abortedLastRun ? 'failed' : 'active',
++                session_type: 'subagent',
++                task_id: null,
++                ended_at: null,
++                created_at: new Date(s.updatedAt).toISOString(),
++                updated_at: new Date(s.updatedAt).toISOString(),
++                agent_name: agentName,
++                agent_avatar_emoji: '🤖',
++                _live: true,
++                _label: s.label,
++                _totalTokens: s.totalTokens,
++                _model: s.model,
++              };
++            });
++          setSessions(subagentSessions);
++        } else {
++          setSessions(sessionsList);
++        }
+       }
+     } catch (error) {
+       console.error('Failed to load sessions:', error);
+     } finally {
+       setLoading(false);
++      setRefreshing(false);
+     }
++  }, [taskId]);
++
++  useEffect(() => {
++    loadSessions();
++    // Auto-refresh every 15 seconds for live data
++    const interval = setInterval(loadSessions, 15000);
++    return () => clearInterval(interval);
++  }, [loadSessions]);
++
++  const handleRefresh = () => {
++    setRefreshing(true);
++    loadSessions();
+   };
+ 
+-  const getStatusIcon = (status: string) => {
++  const getStatusIcon = (status: string, isLive?: boolean) => {
++    if (isLive) {
++      return <Zap className="w-4 h-4 text-yellow-500 animate-pulse" />;
++    }
+     switch (status) {
+       case 'active':
+         return <Circle className="w-4 h-4 text-green-500 fill-current animate-pulse" />;
+@@ -90,6 +146,16 @@ export function SessionsList({ taskId }: SessionsListProps) {
+     });
+   };
+ 
++  const formatTokens = (tokens?: number) => {
++    if (!tokens) return null;
++    if (tokens >= 1000000) {
++      return `${(tokens / 1000000).toFixed(1)}M tokens`;
++    } else if (tokens >= 1000) {
++      return `${(tokens / 1000).toFixed(1)}K tokens`;
++    }
++    return `${tokens} tokens`;
++  };
++
+   const handleMarkComplete = async (sessionId: string) => {
+     try {
+       const res = await fetch(`/api/openclaw/sessions/${sessionId}`, {
+@@ -134,83 +200,200 @@ export function SessionsList({ taskId }: SessionsListProps) {
+     return (
+       <div className="flex flex-col items-center justify-center py-8 text-mc-text-secondary">
+         <div className="text-4xl mb-2">🤖</div>
+-        <p>No sub-agent sessions yet</p>
++        <p>No sub-agent sessions</p>
++        <button
++          onClick={handleRefresh}
++          className="mt-3 flex items-center gap-2 px-3 py-1 text-sm bg-mc-bg-tertiary hover:bg-mc-border rounded"
++        >
++          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
++          Refresh
++        </button>
+       </div>
+     );
+   }
+ 
++  // Separate live and registered sessions
++  const liveSessions = sessions.filter(s => s._live);
++  const registeredSessions = sessions.filter(s => !s._live);
++
+   return (
+-    <div className="space-y-3">
+-      {sessions.map((session) => (
+-        <div
+-          key={session.id}
+-          className="flex gap-3 p-3 bg-mc-bg rounded-lg border border-mc-border"
++    <div className="space-y-4">
++      {/* Refresh button */}
++      <div className="flex justify-end">
++        <button
++          onClick={handleRefresh}
++          disabled={refreshing}
++          className="flex items-center gap-2 px-3 py-1 text-sm bg-mc-bg-tertiary hover:bg-mc-border rounded disabled:opacity-50"
+         >
+-          {/* Agent Avatar */}
+-          <div className="flex-shrink-0">
+-            {session.agent_avatar_emoji ? (
+-              <span className="text-2xl">{session.agent_avatar_emoji}</span>
+-            ) : (
+-              <Bot className="w-8 h-8 text-mc-accent" />
+-            )}
++          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
++          {refreshing ? 'Refreshing...' : 'Refresh'}
++        </button>
++      </div>
++
++      {/* Live Sessions Section */}
++      {liveSessions.length > 0 && (
++        <div>
++          <h4 className="text-xs uppercase tracking-wider text-mc-text-secondary mb-2 flex items-center gap-2">
++            <Zap className="w-3 h-3 text-yellow-500" />
++            Live Sessions ({liveSessions.length})
++          </h4>
++          <div className="space-y-2">
++            {liveSessions.map((session) => (
++              <SessionCard 
++                key={session.id} 
++                session={session}
++                getStatusIcon={getStatusIcon}
++                formatDuration={formatDuration}
++                formatTimestamp={formatTimestamp}
++                formatTokens={formatTokens}
++                onMarkComplete={handleMarkComplete}
++                onDelete={handleDelete}
++              />
++            ))}
++          </div>
++        </div>
++      )}
++
++      {/* Registered Sessions Section */}
++      {registeredSessions.length > 0 && (
++        <div>
++          {liveSessions.length > 0 && (
++            <h4 className="text-xs uppercase tracking-wider text-mc-text-secondary mb-2">
++              Registered Sessions ({registeredSessions.length})
++            </h4>
++          )}
++          <div className="space-y-2">
++            {registeredSessions.map((session) => (
++              <SessionCard 
++                key={session.id} 
++                session={session}
++                getStatusIcon={getStatusIcon}
++                formatDuration={formatDuration}
++                formatTimestamp={formatTimestamp}
++                formatTokens={formatTokens}
++                onMarkComplete={handleMarkComplete}
++                onDelete={handleDelete}
++              />
++            ))}
+           </div>
++        </div>
++      )}
++    </div>
++  );
++}
+ 
+-          {/* Content */}
+-          <div className="flex-1 min-w-0">
+-            {/* Agent name and status */}
+-            <div className="flex items-center gap-2 mb-1">
+-              {getStatusIcon(session.status)}
+-              <span className="font-medium text-mc-text">
+-                {session.agent_name || 'Sub-Agent'}
+-              </span>
+-              <span className="text-xs text-mc-text-secondary capitalize">
+-                {session.status}
+-              </span>
+-            </div>
+-
+-            {/* Session ID */}
+-            <div className="text-xs text-mc-text-secondary font-mono mb-2 truncate">
+-              Session: {session.openclaw_session_id}
+-            </div>
+-
+-            {/* Duration and timestamps */}
+-            <div className="flex items-center gap-3 text-xs text-mc-text-secondary">
+-              <span>
+-                Duration: {formatDuration(session.created_at, session.ended_at)}
+-              </span>
+-              <span>•</span>
+-              <span>Started {formatTimestamp(session.created_at)}</span>
+-            </div>
+-
+-            {/* Channel */}
+-            {session.channel && (
+-              <div className="mt-2 text-xs text-mc-text-secondary">
+-                Channel: <span className="font-mono">{session.channel}</span>
+-              </div>
+-            )}
++// Extracted SessionCard component for cleaner code
++function SessionCard({
++  session,
++  getStatusIcon,
++  formatDuration,
++  formatTimestamp,
++  formatTokens,
++  onMarkComplete,
++  onDelete,
++}: {
++  session: SessionWithAgent;
++  getStatusIcon: (status: string, isLive?: boolean) => React.ReactNode;
++  formatDuration: (start: string, end?: string | null) => string;
++  formatTimestamp: (timestamp: string) => string;
++  formatTokens: (tokens?: number) => string | null;
++  onMarkComplete: (sessionId: string) => void;
++  onDelete: (sessionId: string) => void;
++}) {
++  return (
++    <div
++      className={`flex gap-3 p-3 bg-mc-bg rounded-lg border ${
++        session._live ? 'border-yellow-500/30' : 'border-mc-border'
++      }`}
++    >
++      {/* Agent Avatar */}
++      <div className="flex-shrink-0">
++        {session.agent_avatar_emoji ? (
++          <span className="text-2xl">{session.agent_avatar_emoji}</span>
++        ) : (
++          <Bot className="w-8 h-8 text-mc-accent" />
++        )}
++      </div>
++
++      {/* Content */}
++      <div className="flex-1 min-w-0">
++        {/* Agent name and status */}
++        <div className="flex items-center gap-2 mb-1">
++          {getStatusIcon(session.status, session._live)}
++          <span className="font-medium text-mc-text">
++            {session.agent_name || 'Sub-Agent'}
++          </span>
++          {session._live && (
++            <span className="text-xs px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 rounded">
++              LIVE
++            </span>
++          )}
++          <span className="text-xs text-mc-text-secondary capitalize">
++            {session.status}
++          </span>
++        </div>
++
++        {/* Label (for live sessions) */}
++        {session._label && (
++          <div className="text-sm text-mc-accent mb-1">
++            📋 {session._label}
+           </div>
++        )}
++
++        {/* Session ID */}
++        <div className="text-xs text-mc-text-secondary font-mono mb-2 truncate">
++          {session.openclaw_session_id}
++        </div>
++
++        {/* Stats row */}
++        <div className="flex flex-wrap items-center gap-3 text-xs text-mc-text-secondary">
++          <span>
++            ⏱️ {formatDuration(session.created_at, session.ended_at)}
++          </span>
++          {session._totalTokens && (
++            <span>
++              📊 {formatTokens(session._totalTokens)}
++            </span>
++          )}
++          {session._model && (
++            <span>
++              🧠 {session._model.replace('claude-', '').replace('anthropic/', '')}
++            </span>
++          )}
++          {session.channel && (
++            <span>
++              📡 {session.channel}
++            </span>
++          )}
++        </div>
+ 
+-          {/* Action Buttons */}
+-          <div className="flex flex-col gap-1">
+-            {session.status === 'active' && (
+-              <button
+-                onClick={() => handleMarkComplete(session.openclaw_session_id)}
+-                className="p-1.5 hover:bg-mc-bg-tertiary rounded text-green-500"
+-                title="Mark as complete"
+-              >
+-                <Check className="w-4 h-4" />
+-              </button>
+-            )}
++        {/* Timestamp */}
++        <div className="mt-1 text-xs text-mc-text-secondary">
++          Last active: {formatTimestamp(session.updated_at)}
++        </div>
++      </div>
++
++      {/* Action Buttons - only for registered sessions */}
++      {!session._live && (
++        <div className="flex flex-col gap-1">
++          {session.status === 'active' && (
+             <button
+-              onClick={() => handleDelete(session.openclaw_session_id)}
+-              className="p-1.5 hover:bg-mc-bg-tertiary rounded text-red-500"
+-              title="Delete session"
++              onClick={() => onMarkComplete(session.openclaw_session_id)}
++              className="p-1.5 hover:bg-mc-bg-tertiary rounded text-green-500"
++              title="Mark as complete"
+             >
+-              <Trash2 className="w-4 h-4" />
++              <Check className="w-4 h-4" />
+             </button>
+-          </div>
++          )}
++          <button
++            onClick={() => onDelete(session.openclaw_session_id)}
++            className="p-1.5 hover:bg-mc-bg-tertiary rounded text-red-500"
++            title="Delete session"
++          >
++            <Trash2 className="w-4 h-4" />
++          </button>
+         </div>
+-      ))}
++      )}
+     </div>
+   );
+ }
+-- 
+2.43.0
+

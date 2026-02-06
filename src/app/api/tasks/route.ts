@@ -89,10 +89,11 @@ export async function POST(request: NextRequest) {
 
     const workspaceId = (body as { workspace_id?: string }).workspace_id || 'default';
     const status = (body as { status?: string }).status || 'inbox';
+    const parentTaskId = body.parent_task_id || null;
     
     run(
-      `INSERT INTO tasks (id, title, description, status, priority, assigned_agent_id, created_by_agent_id, workspace_id, business_id, due_date, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO tasks (id, title, description, status, priority, assigned_agent_id, created_by_agent_id, workspace_id, business_id, due_date, parent_task_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         body.title,
@@ -104,6 +105,7 @@ export async function POST(request: NextRequest) {
         workspaceId,
         body.business_id || 'default',
         body.due_date || null,
+        parentTaskId,
         now,
         now,
       ]

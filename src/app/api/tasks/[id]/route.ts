@@ -102,6 +102,25 @@ export async function PATCH(
         shouldDispatch = true;
       }
 
+      // Auto-complete sessions when task moves to done or review
+      if (body.status === 'done' || body.status === 'review') {
+        const activeSessions = queryAll<{ id: string; openclaw_session_id: string }>(
+          `SELECT id, openclaw_session_id FROM openclaw_sessions 
+           WHERE task_id = ? AND status = 'active'`,
+          [id]
+        );
+        
+        if (activeSessions.length > 0) {
+          run(
+            `UPDATE openclaw_sessions 
+             SET status = 'completed', ended_at = ?, updated_at = ?
+             WHERE task_id = ? AND status = 'active'`,
+            [now, now, id]
+          );
+          console.log(`[Task ${id}] Auto-completed ${activeSessions.length} session(s) on status change to ${body.status}`);
+        }
+      }
+
       // Log status change event
       const eventType = body.status === 'done' ? 'task_completed' : 'task_status_changed';
       run(
@@ -109,6 +128,42 @@ export async function PATCH(
          VALUES (?, ?, ?, ?, ?)`,
         [uuidv4(), eventType, id, `Task "${existing.title}" moved to ${body.status}`, now]
       );
+
+      // If this is a subtask completing, check if parent should auto-progress
+      if (body.status === 'done' && existing.parent_task_id) {
+        const siblings = queryAll<{ status: string }>(
+          'SELECT status FROM tasks WHERE parent_task_id = ?',
+          [existing.parent_task_id]
+        );
+        
+        const allDone = siblings.every(s => s.status === 'done');
+        
+        if (allDone) {
+          // Auto-progress parent to testing
+          const parent = queryOne<Task>('SELECT * FROM tasks WHERE id = ?', [existing.parent_task_id]);
+          if (parent && parent.status === 'in_progress') {
+            run(
+              `UPDATE tasks SET status = 'testing', updated_at = ? WHERE id = ?`,
+              [now, existing.parent_task_id]
+            );
+            
+            run(
+              `INSERT INTO events (id, type, task_id, message, created_at)
+               VALUES (?, ?, ?, ?, ?)`,
+              [uuidv4(), 'task_status_changed', existing.parent_task_id, 
+               `All subtasks done - "${parent.title}" moved to testing`, now]
+            );
+            
+            // Broadcast parent update
+            const updatedParent = queryOne<Task>('SELECT * FROM tasks WHERE id = ?', [existing.parent_task_id]);
+            if (updatedParent) {
+              broadcast({ type: 'task_updated', payload: updatedParent });
+            }
+            
+            console.log(`[Task ${existing.parent_task_id}] All subtasks done - auto-moved to testing`);
+          }
+        }
+      }
     }
 
     // Handle assignment change

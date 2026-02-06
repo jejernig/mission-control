@@ -87,11 +87,14 @@ export interface Task {
   workspace_id: string;
   business_id: string;
   due_date?: string;
+  parent_task_id?: string;  // For sub-tasks
   created_at: string;
   updated_at: string;
   // Joined fields
   assigned_agent?: Agent;
   created_by_agent?: Agent;
+  subtask_count?: number;
+  subtasks_done?: number;
 }
 
 export interface Conversation {
@@ -144,6 +147,7 @@ export interface Workspace {
   slug: string;
   description?: string;
   icon: string;
+  parent_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -153,6 +157,7 @@ export interface WorkspaceStats {
   name: string;
   slug: string;
   icon: string;
+  parent_id?: string | null;
   taskCounts: {
     planning: number;
     inbox: number;
@@ -203,6 +208,24 @@ export interface TaskDeliverable {
   path?: string;
   description?: string;
   created_at: string;
+}
+
+// Review types (parallel review checkboxes)
+export type ReviewType = 'uat' | 'security' | 'quality' | 'gap' | 'commit' | 'pr';
+export type ReviewStatus = 'pending' | 'passed' | 'failed' | 'skipped';
+
+export interface TaskReview {
+  id: string;
+  task_id: string;
+  review_type: ReviewType;
+  status: ReviewStatus;
+  reviewer_agent_id?: string;
+  notes?: string;
+  reviewed_at?: string;
+  created_at: string;
+  // Joined fields
+  reviewer_agent_name?: string;
+  reviewer_agent_emoji?: string;
 }
 
 // Planning types
@@ -281,6 +304,7 @@ export interface CreateTaskRequest {
   workspace_id?: string;
   business_id?: string;
   due_date?: string;
+  parent_task_id?: string;  // For creating sub-tasks
 }
 
 export interface UpdateTaskRequest extends Partial<CreateTaskRequest> {

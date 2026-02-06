@@ -36,7 +36,7 @@ export async function PATCH(
   
   try {
     const body = await request.json();
-    const { name, description, icon } = body;
+    const { name, description, icon, github_repo, parent_id } = body;
     
     const db = getDb();
     
@@ -61,6 +61,14 @@ export async function PATCH(
     if (icon !== undefined) {
       updates.push('icon = ?');
       values.push(icon);
+    }
+    if (github_repo !== undefined) {
+      updates.push('github_repo = ?');
+      values.push(github_repo);
+    }
+    if (parent_id !== undefined) {
+      updates.push('parent_id = ?');
+      values.push(parent_id);
     }
     
     if (updates.length === 0) {

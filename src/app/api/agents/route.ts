@@ -10,9 +10,30 @@ export async function GET(request: NextRequest) {
     
     let agents: Agent[];
     if (workspaceId) {
-      agents = queryAll<Agent>(`
-        SELECT * FROM agents WHERE workspace_id = ? ORDER BY is_master DESC, name ASC
-      `, [workspaceId]);
+      // Get the workspace to find its parent
+      const workspace = queryOne<{ parent_id: string | null }>(
+        'SELECT parent_id FROM workspaces WHERE id = ?', 
+        [workspaceId]
+      );
+      
+      // Include agents for this workspace, its parent workspace, and 'default' (legacy global)
+      const parentId = workspace?.parent_id;
+      
+      if (parentId) {
+        // Child workspace: include own agents + parent's agents + default
+        agents = queryAll<Agent>(`
+          SELECT * FROM agents 
+          WHERE workspace_id = ? OR workspace_id = ? OR workspace_id = 'default'
+          ORDER BY is_master DESC, name ASC
+        `, [workspaceId, parentId]);
+      } else {
+        // Top-level workspace: include own agents + default
+        agents = queryAll<Agent>(`
+          SELECT * FROM agents 
+          WHERE workspace_id = ? OR workspace_id = 'default' 
+          ORDER BY is_master DESC, name ASC
+        `, [workspaceId]);
+      }
     } else {
       agents = queryAll<Agent>(`
         SELECT * FROM agents ORDER BY is_master DESC, name ASC

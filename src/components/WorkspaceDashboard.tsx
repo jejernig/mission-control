@@ -3,10 +3,37 @@
 import { useState, useEffect } from 'react';
 import { Plus, ArrowRight, Folder, Users, CheckSquare, Trash2, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
-import type { WorkspaceStats } from '@/lib/types';
+import type { WorkspaceStats, Workspace } from '@/lib/types';
+
+interface WorkspaceWithChildren extends WorkspaceStats {
+  parent_id?: string | null;
+  children?: WorkspaceWithChildren[];
+}
+
+// Build tree structure from flat workspace list
+function buildWorkspaceTree(workspaces: WorkspaceWithChildren[]): WorkspaceWithChildren[] {
+  const map = new Map<string, WorkspaceWithChildren>();
+  const roots: WorkspaceWithChildren[] = [];
+  
+  // First pass: create map
+  workspaces.forEach(w => map.set(w.id, { ...w, children: [] }));
+  
+  // Second pass: build tree
+  workspaces.forEach(w => {
+    const node = map.get(w.id)!;
+    if (w.parent_id && map.has(w.parent_id)) {
+      map.get(w.parent_id)!.children!.push(node);
+    } else {
+      roots.push(node);
+    }
+  });
+  
+  return roots;
+}
 
 export function WorkspaceDashboard() {
-  const [workspaces, setWorkspaces] = useState<WorkspaceStats[]>([]);
+  const [workspaces, setWorkspaces] = useState<WorkspaceWithChildren[]>([]);
+  const [workspaceTree, setWorkspaceTree] = useState<WorkspaceWithChildren[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -20,6 +47,7 @@ export function WorkspaceDashboard() {
       if (res.ok) {
         const data = await res.json();
         setWorkspaces(data);
+        setWorkspaceTree(buildWorkspaceTree(data));
       }
     } catch (error) {
       console.error('Failed to load workspaces:', error);
@@ -84,24 +112,28 @@ export function WorkspaceDashboard() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {workspaces.map((workspace) => (
-              <WorkspaceCard 
+          <div className="space-y-8">
+            {workspaceTree.map((workspace) => (
+              <WorkspaceGroup 
                 key={workspace.id} 
-                workspace={workspace} 
-                onDelete={(id) => setWorkspaces(workspaces.filter(w => w.id !== id))}
+                workspace={workspace}
+                allWorkspaces={workspaces}
+                onDelete={(id) => {
+                  setWorkspaces(workspaces.filter(w => w.id !== id));
+                  setWorkspaceTree(buildWorkspaceTree(workspaces.filter(w => w.id !== id)));
+                }}
               />
             ))}
             
-            {/* Add workspace card */}
+            {/* Add organization button */}
             <button
               onClick={() => setShowCreateModal(true)}
-              className="border-2 border-dashed border-mc-border rounded-xl p-6 hover:border-mc-accent/50 transition-colors flex flex-col items-center justify-center gap-3 min-h-[200px]"
+              className="w-full border-2 border-dashed border-mc-border rounded-xl p-6 hover:border-mc-accent/50 transition-colors flex items-center justify-center gap-3"
             >
-              <div className="w-12 h-12 rounded-full bg-mc-bg-tertiary flex items-center justify-center">
-                <Plus className="w-6 h-6 text-mc-text-secondary" />
+              <div className="w-10 h-10 rounded-full bg-mc-bg-tertiary flex items-center justify-center">
+                <Plus className="w-5 h-5 text-mc-text-secondary" />
               </div>
-              <span className="text-mc-text-secondary font-medium">Add Workspace</span>
+              <span className="text-mc-text-secondary font-medium">Add Organization</span>
             </button>
           </div>
         )}
@@ -121,7 +153,88 @@ export function WorkspaceDashboard() {
   );
 }
 
-function WorkspaceCard({ workspace, onDelete }: { workspace: WorkspaceStats; onDelete: (id: string) => void }) {
+function WorkspaceGroup({ 
+  workspace, 
+  allWorkspaces,
+  onDelete 
+}: { 
+  workspace: WorkspaceWithChildren;
+  allWorkspaces: WorkspaceWithChildren[];
+  onDelete: (id: string) => void;
+}) {
+  const [showAddProject, setShowAddProject] = useState(false);
+  const hasChildren = workspace.children && workspace.children.length > 0;
+  const isOrg = !workspace.parent_id; // Top-level = organization
+  
+  if (!isOrg) {
+    // Render as a simple card for non-org workspaces without children
+    return (
+      <WorkspaceCard 
+        workspace={workspace} 
+        onDelete={onDelete}
+      />
+    );
+  }
+  
+  return (
+    <div className="space-y-4">
+      {/* Organization Header */}
+      <div className="flex items-center justify-between">
+        <Link href={`/workspace/${workspace.slug}`} className="flex items-center gap-3 group">
+          <span className="text-3xl">{workspace.icon}</span>
+          <div>
+            <h3 className="text-xl font-bold group-hover:text-mc-accent transition-colors">
+              {workspace.name}
+            </h3>
+            <p className="text-sm text-mc-text-secondary">
+              {workspace.children?.length || 0} projects · {workspace.agentCount} agents
+            </p>
+          </div>
+        </Link>
+        <button
+          onClick={() => setShowAddProject(true)}
+          className="flex items-center gap-2 px-3 py-1.5 text-sm bg-mc-bg-tertiary hover:bg-mc-border rounded-lg transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          Add Project
+        </button>
+      </div>
+      
+      {/* Child Projects Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pl-4 border-l-2 border-mc-border ml-4">
+        {workspace.children?.map((child) => (
+          <WorkspaceCard 
+            key={child.id} 
+            workspace={child}
+            onDelete={onDelete}
+            isChild
+          />
+        ))}
+        
+        {(!workspace.children || workspace.children.length === 0) && (
+          <div className="text-mc-text-secondary text-sm py-4">
+            No projects yet. Click "Add Project" to create one.
+          </div>
+        )}
+      </div>
+      
+      {/* Add Project Modal */}
+      {showAddProject && (
+        <CreateWorkspaceModal
+          parentId={workspace.id}
+          parentName={workspace.name}
+          onClose={() => setShowAddProject(false)}
+          onCreated={() => {
+            setShowAddProject(false);
+            window.location.reload(); // Simple refresh for now
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function WorkspaceCard({ workspace, onDelete, isChild }: { workspace: WorkspaceStats; onDelete: (id: string) => void; isChild?: boolean }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -177,11 +290,14 @@ function WorkspaceCard({ workspace, onDelete }: { workspace: WorkspaceStats; onD
           </div>
         </div>
 
-        {/* Simple task/agent counts */}
+        {/* Simple task/agent counts - show active (non-done) tasks */}
         <div className="flex items-center gap-4 text-sm text-mc-text-secondary mt-4">
           <div className="flex items-center gap-1">
             <CheckSquare className="w-4 h-4" />
-            <span>{workspace.taskCounts.total} tasks</span>
+            <span>{workspace.taskCounts.total - workspace.taskCounts.done} active</span>
+            {workspace.taskCounts.done > 0 && (
+              <span className="text-mc-text-secondary/50">({workspace.taskCounts.done} done)</span>
+            )}
           </div>
           <div className="flex items-center gap-1">
             <Users className="w-4 h-4" />
@@ -236,7 +352,17 @@ function WorkspaceCard({ workspace, onDelete }: { workspace: WorkspaceStats; onD
   );
 }
 
-function CreateWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+function CreateWorkspaceModal({ 
+  onClose, 
+  onCreated,
+  parentId,
+  parentName
+}: { 
+  onClose: () => void; 
+  onCreated: () => void;
+  parentId?: string;
+  parentName?: string;
+}) {
   const [name, setName] = useState('');
   const [icon, setIcon] = useState('📁');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -255,7 +381,7 @@ function CreateWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onC
       const res = await fetch('/api/workspaces', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), icon }),
+        body: JSON.stringify({ name: name.trim(), icon, parent_id: parentId }),
       });
 
       if (res.ok) {
@@ -275,7 +401,14 @@ function CreateWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onC
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-mc-bg-secondary border border-mc-border rounded-xl w-full max-w-md">
         <div className="p-6 border-b border-mc-border">
-          <h2 className="text-lg font-semibold">Create New Workspace</h2>
+          <h2 className="text-lg font-semibold">
+            {parentId ? `Add Project to ${parentName}` : 'Create Organization'}
+          </h2>
+          {parentId && (
+            <p className="text-sm text-mc-text-secondary mt-1">
+              This project will be under {parentName}
+            </p>
+          )}
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
