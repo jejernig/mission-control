@@ -3,7 +3,7 @@
  * Loads configuration from environment variables
  */
 
-import type { OrchestratorConfig } from './orchestrator';
+import type { OrchestratorConfig } from './types';
 
 function parseBoolean(value: string | undefined, defaultValue: boolean): boolean {
   if (value === undefined) return defaultValue;

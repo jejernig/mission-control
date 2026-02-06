@@ -84,6 +84,10 @@ export async function PATCH(
       updates.push('agents_md = ?');
       values.push(body.agents_md);
     }
+    if (body.workspace_id !== undefined) {
+      updates.push('workspace_id = ?');
+      values.push(body.workspace_id);
+    }
 
     if (updates.length === 0) {
       return NextResponse.json({ error: 'No updates provided' }, { status: 400 });

@@ -12,7 +12,7 @@ import { getLoadedPlugins } from './loader';
 async function safeExecuteHook(
   pluginId: string,
   hookName: string,
-  hookFn: Function,
+  hookFn: (...args: any[]) => any,
   ...args: any[]
 ): Promise<void> {
   try {

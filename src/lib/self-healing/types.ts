@@ -209,3 +209,29 @@ export interface Metric {
   timestamp: number;
   metadata?: Record<string, any>;
 }
+
+// ============================================================================
+// Configuration Types
+// ============================================================================
+
+export interface DetectionConfig {
+  phantomDetection: {
+    enabled: boolean;
+    minTimeSinceDone: number; // minutes
+  };
+  stuckDetection: {
+    enabled: boolean;
+    timeThreshold: number; // hours
+  };
+  cooldownPeriod: number; // minutes
+  gracePeriod: number; // minutes for new tasks
+  whitelist: string[]; // task patterns to ignore
+}
+
+export interface OrchestratorConfig {
+  enabled: boolean;
+  scanInterval: number; // minutes
+  detection: DetectionConfig;
+  dryRun: boolean; // if true, detect and analyze but don't create fix tasks
+  maxFixesPerRun: number; // limit number of fixes created in one scan
+}

@@ -13,6 +13,8 @@ import {
   getFailurePatterns,
 } from '@/lib/self-healing/rca-db';
 
+export const dynamic = 'force-dynamic';
+
 const SELF_HEALING_DB = process.env.SELF_HEALING_DB_PATH || 
   './src/lib/self-healing/db/self_healing.db';
 

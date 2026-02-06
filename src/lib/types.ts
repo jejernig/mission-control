@@ -198,7 +198,7 @@ export interface TaskActivity {
   agent?: Agent;
 }
 
-export type DeliverableType = 'file' | 'url' | 'artifact';
+export type DeliverableType = 'file' | 'url' | 'artifact' | 'commit';
 
 export interface TaskDeliverable {
   id: string;
@@ -286,6 +286,7 @@ export interface CreateAgentRequest {
   description?: string;
   avatar_emoji?: string;
   is_master?: boolean;
+  workspace_id?: string;
   soul_md?: string;
   user_md?: string;
   agents_md?: string;
@@ -356,7 +357,8 @@ export type SSEEventType =
   | 'activity_logged'
   | 'deliverable_added'
   | 'agent_spawned'
-  | 'agent_completed';
+  | 'agent_completed'
+  | 'review_updated';
 
 export interface SSEEvent {
   type: SSEEventType;
@@ -368,5 +370,8 @@ export interface SSEEvent {
     deleted?: boolean;
   } | {
     id: string;  // For task_deleted events
+  } | {
+    task_id: string;  // For review_updated events
+    review: any;
   };
 }

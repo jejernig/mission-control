@@ -20,17 +20,17 @@ export async function GET(request: NextRequest) {
       const parentId = workspace?.parent_id;
       
       if (parentId) {
-        // Child workspace: include own agents + parent's agents + default
+        // Child workspace: include own agents + parent's agents + default + org-wide (NULL)
         agents = queryAll<Agent>(`
           SELECT * FROM agents 
-          WHERE workspace_id = ? OR workspace_id = ? OR workspace_id = 'default'
+          WHERE workspace_id = ? OR workspace_id = ? OR workspace_id = 'default' OR workspace_id IS NULL
           ORDER BY is_master DESC, name ASC
         `, [workspaceId, parentId]);
       } else {
-        // Top-level workspace: include own agents + default
+        // Top-level workspace: include own agents + default + org-wide (NULL)
         agents = queryAll<Agent>(`
           SELECT * FROM agents 
-          WHERE workspace_id = ? OR workspace_id = 'default' 
+          WHERE workspace_id = ? OR workspace_id = 'default' OR workspace_id IS NULL
           ORDER BY is_master DESC, name ASC
         `, [workspaceId]);
       }

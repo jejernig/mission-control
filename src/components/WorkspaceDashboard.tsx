@@ -213,7 +213,7 @@ function WorkspaceGroup({
         
         {(!workspace.children || workspace.children.length === 0) && (
           <div className="text-mc-text-secondary text-sm py-4">
-            No projects yet. Click "Add Project" to create one.
+            No projects yet. Click &quot;Add Project&quot; to create one.
           </div>
         )}
       </div>

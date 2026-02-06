@@ -5,7 +5,7 @@
 
 import type { Task } from '../types';
 import type { DetectionResult } from './detection';
-import { db } from '../db';
+import { queryAll } from '../db';
 
 export interface RCAResult {
   taskId: string;
@@ -38,25 +38,25 @@ export class RCAService {
     task: Task,
     detection: DetectionResult
   ): Promise<RCAResult> {
-    const activities = await db.getActivities(task.id);
-    const deliverables = await db.getDeliverables(task.id);
+    const activities = queryAll<any>('SELECT * FROM task_activities WHERE task_id = ?', [task.id]);
+    const deliverables = queryAll<any>('SELECT * FROM task_deliverables WHERE task_id = ?', [task.id]);
 
     // Analyze patterns in activities
     const hasCompletionActivity = activities.some(a =>
-      a.action.toLowerCase().includes('complet') ||
-      a.action.toLowerCase().includes('finish') ||
-      a.action.toLowerCase().includes('done')
+      ((a.message || "").toLowerCase()).includes('complet') ||
+      ((a.message || "").toLowerCase()).includes('finish') ||
+      ((a.message || "").toLowerCase()).includes('done')
     );
 
     const hasCodeActivity = activities.some(a =>
-      a.action.toLowerCase().includes('code') ||
-      a.action.toLowerCase().includes('implement') ||
-      a.action.toLowerCase().includes('develop')
+      ((a.message || "").toLowerCase()).includes('code') ||
+      ((a.message || "").toLowerCase()).includes('implement') ||
+      ((a.message || "").toLowerCase()).includes('develop')
     );
 
     const hasTestActivity = activities.some(a =>
-      a.action.toLowerCase().includes('test') ||
-      a.action.toLowerCase().includes('verif')
+      ((a.message || "").toLowerCase()).includes('test') ||
+      ((a.message || "").toLowerCase()).includes('verif')
     );
 
     // Determine root cause
@@ -125,8 +125,8 @@ export class RCAService {
     task: Task,
     detection: DetectionResult
   ): Promise<RCAResult> {
-    const activities = await db.getActivities(task.id);
-    const deliverables = await db.getDeliverables(task.id);
+    const activities = queryAll<any>('SELECT * FROM task_activities WHERE task_id = ?', [task.id]);
+    const deliverables = queryAll<any>('SELECT * FROM task_deliverables WHERE task_id = ?', [task.id]);
 
     // Analyze activity patterns
     const recentActivities = activities.filter(a => {
@@ -137,15 +137,15 @@ export class RCAService {
     });
 
     const errorActivities = activities.filter(a =>
-      a.action.toLowerCase().includes('error') ||
-      a.action.toLowerCase().includes('fail') ||
-      a.action.toLowerCase().includes('block')
+      ((a.message || "").toLowerCase()).includes('error') ||
+      ((a.message || "").toLowerCase()).includes('fail') ||
+      ((a.message || "").toLowerCase()).includes('block')
     );
 
     const questionActivities = activities.filter(a =>
-      a.action.toLowerCase().includes('question') ||
-      a.action.toLowerCase().includes('clarif') ||
-      a.action.toLowerCase().includes('unclear')
+      ((a.message || "").toLowerCase()).includes('question') ||
+      ((a.message || "").toLowerCase()).includes('clarif') ||
+      ((a.message || "").toLowerCase()).includes('unclear')
     );
 
     // Determine root cause

@@ -285,6 +285,41 @@ const migrations: Migration[] = [
       // This is enforced in application logic, not DB constraints
       console.log('[Migration 010] Task hierarchy support added');
     }
+  },
+  {
+    id: '011',
+    name: 'add_agent_capabilities',
+    up: (db) => {
+      console.log('[Migration 011] Creating agent_capabilities table...');
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS agent_capabilities (
+          id TEXT PRIMARY KEY,
+          agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+          domain TEXT NOT NULL,
+          layer TEXT,
+          skills TEXT,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_agent_capabilities_agent ON agent_capabilities(agent_id);
+        CREATE INDEX IF NOT EXISTS idx_agent_capabilities_domain ON agent_capabilities(domain);
+      `);
+      console.log('[Migration 011] Created agent_capabilities table');
+    }
+  },
+  {
+    id: '012',
+    name: 'add_openclaw_agent_id',
+    up: (db) => {
+      console.log('[Migration 012] Adding openclaw_agent_id to agents...');
+      
+      const columns = db.prepare("PRAGMA table_info(agents)").all() as { name: string }[];
+      if (!columns.some(c => c.name === 'openclaw_agent_id')) {
+        db.exec("ALTER TABLE agents ADD COLUMN openclaw_agent_id TEXT");
+        db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_openclaw_id_unique ON agents(openclaw_agent_id) WHERE openclaw_agent_id IS NOT NULL");
+        console.log('[Migration 012] Added openclaw_agent_id column with unique constraint');
+      }
+    }
   }
 ];
 

@@ -155,9 +155,9 @@ export async function GET(
       if (!client.isConnected()) {
         await client.connect();
       }
-      const allSessions = await client.listSessions() as OpenClawLiveSession[];
+      const allSessions = await client.listSessions() as any[];
       // Filter to only subagent sessions
-      liveSessions = allSessions.filter((s: OpenClawLiveSession) => 
+      liveSessions = allSessions.filter((s: any) => 
         s.key?.includes(':subagent:')
       );
     } catch (e) {
@@ -190,15 +190,11 @@ export async function GET(
           agent_name: agentName,
           agent_avatar_emoji: '🤖',
           // Extra fields for live sessions
-          // @ts-expect-error - adding extra fields for live sessions
           _live: true,
-          // @ts-expect-error - adding extra fields for live sessions
           _label: live.label,
-          // @ts-expect-error - adding extra fields for live sessions
           _totalTokens: live.totalTokens,
-          // @ts-expect-error - adding extra fields for live sessions
           _model: live.model,
-        });
+        } as any);
       }
     }
 

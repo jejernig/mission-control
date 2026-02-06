@@ -4,7 +4,7 @@
  */
 
 import type { Task } from '../types';
-import { getDb } from '../db';
+import { queryAll } from '../db';
 
 export interface DetectionResult {
   issueDetected: boolean;
@@ -109,30 +109,37 @@ export class DetectionService {
     }
 
     // Get deliverables to check for commits
-    const deliverables = await db.getDeliverables(task.id);
+    const deliverables = queryAll<any>(
+      'SELECT * FROM task_deliverables WHERE task_id = ?',
+      [task.id]
+    );
     
     // Count commits in deliverables
     let commitCount = 0;
     for (const deliverable of deliverables) {
-      if (deliverable.type === 'code' || deliverable.type === 'commit') {
+      if (deliverable.deliverable_type === 'code' || deliverable.deliverable_type === 'commit') {
         commitCount++;
       }
-      // Also check URL patterns for git commits
-      if (deliverable.url && (
-        deliverable.url.includes('/commit/') || 
-        deliverable.url.includes('/commits/')
+      // Also check path patterns for git commits
+      if (deliverable.path && (
+        deliverable.path.includes('/commit/') || 
+        deliverable.path.includes('/commits/')
       )) {
         commitCount++;
       }
     }
 
     // Check activities for commit mentions
-    const activities = await db.getActivities(task.id);
+    const activities = queryAll<any>(
+      'SELECT * FROM task_activities WHERE task_id = ?',
+      [task.id]
+    );
     for (const activity of activities) {
+      const message = (activity.message || '').toLowerCase();
       if (
-        activity.action.toLowerCase().includes('commit') ||
-        activity.action.toLowerCase().includes('pushed') ||
-        activity.action.toLowerCase().includes('merge')
+        message.includes('commit') ||
+        message.includes('pushed') ||
+        message.includes('merge')
       ) {
         commitCount++;
       }
@@ -165,9 +172,12 @@ export class DetectionService {
 
     if (hoursInProgress >= this.config.stuckDetection.timeThreshold) {
       // Check if there's been any recent activity
-      const activities = await db.getActivities(task.id);
+      const activities = queryAll<any>(
+        'SELECT * FROM task_activities WHERE task_id = ?',
+        [task.id]
+      );
       const recentActivities = activities.filter(a => {
-        const activityDate = new Date(a.timestamp);
+        const activityDate = new Date(a.created_at);
         const hoursSinceActivity = (now.getTime() - activityDate.getTime()) / (1000 * 60 * 60);
         return hoursSinceActivity < 2; // Activity in last 2 hours
       });
@@ -198,7 +208,7 @@ export class DetectionService {
    * Scan all tasks for issues
    */
   async scanAllTasks(): Promise<DetectionResult[]> {
-    const tasks = await db.getAllTasks();
+    const tasks = queryAll<Task>('SELECT * FROM tasks');
     const results: DetectionResult[] = [];
 
     for (const task of tasks) {

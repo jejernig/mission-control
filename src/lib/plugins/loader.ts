@@ -57,6 +57,8 @@ async function loadPlugin(pluginDir: string): Promise<LoadedPlugin | null> {
     }
 
     // Load plugin module
+    // Plugins use CommonJS (module.exports), so we need require()
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const pluginModule = require(indexPath);
     
     // Call init function if it exists

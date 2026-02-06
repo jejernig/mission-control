@@ -54,8 +54,9 @@ export default function AgentsPage() {
 
   const orgId = workspaces.find((w) => w.id === 'default')?.organization_id ?? 'org-default';
 
-  const orgAgents = agents.filter((a) => a.scope === 'org' && a.organization_id === orgId);
-  const workspaceAgents = agents.filter((a) => a.scope !== 'org');
+  // Org-wide agents have workspace_id === null
+  const orgAgents = agents.filter((a) => a.workspace_id === null);
+  const workspaceAgents = agents.filter((a) => a.workspace_id !== null);
 
   const selectedWorkspace =
     selectedRow !== 'org' ? workspaces.find((w) => w.id === selectedRow) : undefined;
@@ -71,7 +72,7 @@ export default function AgentsPage() {
       const res = await fetch(`/api/agents/${agent.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scope: 'org', workspace_id: null, organization_id: orgId }),
+        body: JSON.stringify({ workspace_id: null }),
       });
       if (!res.ok) throw new Error('PATCH failed');
       const updated = (await res.json()) as Agent;
@@ -91,7 +92,7 @@ export default function AgentsPage() {
       const res = await fetch(`/api/agents/${agent.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scope: 'workspace', workspace_id: workspaceId }),
+        body: JSON.stringify({ workspace_id: workspaceId }),
       });
       if (!res.ok) throw new Error('PATCH failed');
       const updated = (await res.json()) as Agent;

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getOpenClawClient } from '@/lib/openclaw/client';
 import { getDb } from '@/lib/db';
 import { broadcast } from '@/lib/events';
+import { onSessionComplete } from '@/lib/openclaw/session-completion-hook';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -143,6 +144,19 @@ export async function PATCH(request: Request, { params }: RouteParams) {
             taskId: session.task_id,
             sessionId: id,
           },
+        });
+      }
+      
+      // Session completion hook: auto-post activity if agent didn't report
+      if (session.task_id && session.agent_id) {
+        await onSessionComplete(db, {
+          sessionId: session.id,
+          openclawSessionId: id,
+          taskId: session.task_id,
+          agentId: session.agent_id,
+          startedAt: session.started_at || session.created_at,
+          endedAt: ended_at || new Date().toISOString(),
+          status: status,
         });
       }
     }
