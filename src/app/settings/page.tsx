@@ -7,10 +7,11 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Settings, Save, RotateCcw, Home, FolderOpen, Link as LinkIcon } from 'lucide-react';
+import { Settings, Save, RotateCcw, FolderOpen, Link as LinkIcon } from 'lucide-react';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { getConfig, updateConfig, resetConfig, type MissionControlConfig } from '@/lib/config';
 
-export default function SettingsPage() {
+function SettingsPageContent() {
   const router = useRouter();
   const [config, setConfig] = useState<MissionControlConfig | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -225,5 +226,13 @@ export default function SettingsPage() {
         </section>
       </div>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <ErrorBoundary>
+      <SettingsPageContent />
+    </ErrorBoundary>
   );
 }

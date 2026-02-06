@@ -4,7 +4,7 @@ import { queryOne, run, queryAll } from '@/lib/db';
 import { broadcast } from '@/lib/events';
 import { executeOnTaskUpdated } from '@/lib/plugins';
 import { getMissionControlUrl } from '@/lib/config';
-import type { Task, UpdateTaskRequest, Agent, TaskDeliverable } from '@/lib/types';
+import type { Task, UpdateTaskRequest, Agent } from '@/lib/types';
 
 // GET /api/tasks/[id] - Get a single task
 export async function GET(

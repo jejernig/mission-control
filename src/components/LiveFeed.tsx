@@ -46,23 +46,6 @@ export function LiveFeed() {
     }
   };
 
-  const getEventColor = (type: string) => {
-    switch (type) {
-      case 'task_completed':
-        return 'text-mc-accent-green';
-      case 'task_created':
-        return 'text-mc-accent-pink';
-      case 'task_assigned':
-        return 'text-mc-accent-yellow';
-      case 'message_sent':
-        return 'text-mc-accent';
-      case 'agent_joined':
-        return 'text-mc-accent-cyan';
-      default:
-        return 'text-mc-text-secondary';
-    }
-  };
-
   return (
     <aside className="w-80 bg-mc-bg-secondary border-l border-mc-border flex flex-col">
       {/* Header */}

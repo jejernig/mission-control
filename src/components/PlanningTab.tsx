@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { CheckCircle, Circle, Lock, AlertCircle, Loader2 } from 'lucide-react';
+import { CheckCircle, Lock, AlertCircle, Loader2 } from 'lucide-react';
 
 interface PlanningOption {
   id: string;
@@ -100,7 +100,7 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
       } else {
         setError(data.error || 'Failed to start planning');
       }
-    } catch (err) {
+    } catch (_err) {
       setError('Failed to start planning');
     } finally {
       setStarting(false);
@@ -153,7 +153,7 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
       } else {
         setError(data.error || 'Failed to submit answer');
       }
-    } catch (err) {
+    } catch (_err) {
       setError('Failed to submit answer');
     } finally {
       setSubmitting(false);

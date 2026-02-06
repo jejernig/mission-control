@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import type { Agent, Workspace } from '@/lib/types';
 
 interface WorkspaceRow extends Workspace {
@@ -10,7 +11,7 @@ interface WorkspaceRow extends Workspace {
 
 type SelectedRow = 'org' | string; // 'org' = org-wide row, or workspace_id
 
-export default function AgentsPage() {
+function AgentsPageContent() {
   const [workspaces, setWorkspaces] = useState<WorkspaceRow[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedRow, setSelectedRow] = useState<SelectedRow>('org');
@@ -297,5 +298,13 @@ export default function AgentsPage() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function AgentsPage() {
+  return (
+    <ErrorBoundary>
+      <AgentsPageContent />
+    </ErrorBoundary>
   );
 }

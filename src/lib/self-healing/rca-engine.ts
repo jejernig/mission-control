@@ -7,7 +7,6 @@ import { randomUUID } from 'crypto';
 import type {
   Issue,
   FailurePattern,
-  PatternConditions,
   RCAAnalysisInput,
   RCAAnalysisResult,
   PatternMatch,

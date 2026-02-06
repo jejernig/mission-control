@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { queryOne, queryAll, run } from '@/lib/db';
-import type { Task, Agent, OpenClawSession } from '@/lib/types';
+import type { Task, OpenClawSession } from '@/lib/types';
 
 /**
  * POST /api/webhooks/agent-completion

@@ -1,4 +1,4 @@
-import { IssueContext, GeneratedFix, FixTemplate } from './fix-templates';
+import { IssueContext, GeneratedFix } from './fix-templates';
 import { FIX_TEMPLATES } from './fix-templates';
 
 export interface RankedFix extends GeneratedFix {

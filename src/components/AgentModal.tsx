@@ -15,7 +15,7 @@ interface AgentModalProps {
 const EMOJI_OPTIONS = ['🤖', '🦞', '💻', '🔍', '✍️', '🎨', '📊', '🧠', '⚡', '🚀', '🎯', '🔧'];
 
 export function AgentModal({ agent, onClose, workspaceId, onAgentCreated }: AgentModalProps) {
-  const { addAgent, updateAgent, agents } = useMissionControl();
+  const { addAgent, updateAgent } = useMissionControl();
   const [activeTab, setActiveTab] = useState<'info' | 'soul' | 'user' | 'agents'>('info');
   const [isSubmitting, setIsSubmitting] = useState(false);
 

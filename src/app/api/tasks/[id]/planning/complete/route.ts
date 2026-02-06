@@ -10,7 +10,7 @@ export async function POST(
 
   try {
     const body = await request.json();
-    const { spec, agents, execution_plan, analysis } = body;
+    const { spec, agents, execution_plan } = body;
 
     if (!spec || !agents) {
       return NextResponse.json(

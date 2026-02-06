@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Save, Trash2, Activity, Package, Bot, ClipboardList, Plus, GitBranch, CheckSquare } from 'lucide-react';
+import { X, Save, Trash2, Activity, Package, Bot, ClipboardList, GitBranch, CheckSquare } from 'lucide-react';
 import { useMissionControl } from '@/lib/store';
 import { ActivityLog } from './ActivityLog';
 import { DeliverablesList } from './DeliverablesList';

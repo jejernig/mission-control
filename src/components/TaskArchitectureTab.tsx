@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { GitBranch, ArrowUp, CheckCircle2, Circle, Clock, AlertCircle } from 'lucide-react';
+import { GitBranch, ArrowUp, CheckCircle2, Circle, Clock } from 'lucide-react';
 import type { Task } from '@/lib/types';
 
 interface SubtaskStats {

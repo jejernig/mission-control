@@ -16,7 +16,7 @@ export class AgentMatcher {
    * Find the best agent matches for a task analysis
    */
   async findMatches(analysis: TaskAnalysis, workspaceId: string, topN: number = 3): Promise<AgentMatch[]> {
-    const db = getDb();
+    const _db = getDb();
 
     // Get all agents with capabilities in the workspace
     const agentsWithCapabilities = this.getAgentsWithCapabilities(workspaceId);

@@ -8,7 +8,6 @@ import { getDb } from '@/lib/db';
 import { broadcast } from '@/lib/events';
 import { executeOnDeliverableAdded } from '@/lib/plugins';
 import { existsSync } from 'fs';
-import path from 'path';
 import type { TaskDeliverable } from '@/lib/types';
 
 interface Workspace {

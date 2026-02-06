@@ -9,12 +9,13 @@ import { AgentsSidebar } from '@/components/AgentsSidebar';
 import { MissionQueue } from '@/components/MissionQueue';
 import { LiveFeed } from '@/components/LiveFeed';
 import { SSEDebugPanel } from '@/components/SSEDebugPanel';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useMissionControl } from '@/lib/store';
 import { useSSE } from '@/hooks/useSSE';
 import { debug } from '@/lib/debug';
 import type { Task, Workspace } from '@/lib/types';
 
-export default function WorkspacePage() {
+function WorkspacePageContent() {
   const params = useParams();
   const slug = params.slug as string;
   
@@ -215,5 +216,13 @@ export default function WorkspacePage() {
       {/* Debug Panel - only shows when debug mode enabled */}
       <SSEDebugPanel />
     </div>
+  );
+}
+
+export default function WorkspacePage() {
+  return (
+    <ErrorBoundary>
+      <WorkspacePageContent />
+    </ErrorBoundary>
   );
 }

@@ -228,7 +228,7 @@ export class TaskAnalyzer {
   /**
    * Detect required skills
    */
-  private detectSkills(text: string, keywords: string[]): string[] {
+  private detectSkills(text: string, _keywords: string[]): string[] {
     const detectedSkills: string[] = [];
 
     for (const [skill, patterns] of Object.entries(SKILL_PATTERNS)) {
