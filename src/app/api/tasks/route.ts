@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { queryAll, queryOne, run } from '@/lib/db';
 import { broadcast } from '@/lib/events';
+import { executeOnTaskCreated } from '@/lib/plugins';
 import type { Task, CreateTaskRequest, Agent } from '@/lib/types';
 
 // GET /api/tasks - List all tasks with optional filters
@@ -146,6 +147,9 @@ export async function POST(request: NextRequest) {
         type: 'task_created',
         payload: task,
       });
+      
+      // Execute plugin hooks
+      await executeOnTaskCreated(task);
     }
     
     return NextResponse.json(task, { status: 201 });

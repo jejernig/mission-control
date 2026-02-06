@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { queryOne, run, queryAll } from '@/lib/db';
 import { broadcast } from '@/lib/events';
+import { executeOnTaskUpdated } from '@/lib/plugins';
 import { getMissionControlUrl } from '@/lib/config';
 import type { Task, UpdateTaskRequest, Agent, TaskDeliverable } from '@/lib/types';
 
@@ -218,6 +219,9 @@ export async function PATCH(
         type: 'task_updated',
         payload: task,
       });
+      
+      // Execute plugin hooks
+      await executeOnTaskUpdated(task);
     }
 
     // Trigger auto-dispatch if needed

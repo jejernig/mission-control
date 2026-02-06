@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { broadcast } from '@/lib/events';
+import { executeOnActivityLogged } from '@/lib/plugins';
 import type { TaskActivity } from '@/lib/types';
 
 /**
@@ -142,6 +143,9 @@ export async function POST(
       type: 'activity_logged',
       payload: result,
     });
+    
+    // Execute plugin hooks
+    await executeOnActivityLogged(result);
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {

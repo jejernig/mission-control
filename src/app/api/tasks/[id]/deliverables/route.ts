@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { broadcast } from '@/lib/events';
+import { executeOnDeliverableAdded } from '@/lib/plugins';
 import { existsSync } from 'fs';
 import path from 'path';
 import type { TaskDeliverable } from '@/lib/types';
@@ -128,6 +129,9 @@ export async function POST(
       type: 'deliverable_added',
       payload: deliverable,
     });
+    
+    // Execute plugin hooks
+    await executeOnDeliverableAdded(deliverable);
 
     // Return with warning if file doesn't exist
     if (deliverable_type === 'file' && !fileExists) {

@@ -46,3 +46,6 @@ next-env.d.ts
 
 # local development notes/handoffs (may contain sensitive context)
 /thoughts/
+
+# plugins (user-installed, not part of repo)
+/plugins/
