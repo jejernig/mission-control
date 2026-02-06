@@ -1,318 +1,404 @@
-# RCA Pattern Matching Engine
+# Self-Healing Fix Generation System
 
-The Root Cause Analysis (RCA) Pattern Matching Engine analyzes detected issues and identifies potential root causes by matching against known failure patterns.
+Automated fix generation and remediation task creation for Mission Control.
 
 ## Overview
 
-The RCA engine is a core component of the self-healing pipeline that:
-
-1. **Matches Issues Against Patterns** - Evaluates issue signals against a library of known failure patterns
-2. **Calculates Confidence Scores** - Returns confidence levels for each matched pattern
-3. **Recommends Actions** - Suggests remediation steps based on matched patterns
-4. **Tracks Statistics** - Updates pattern match counts and success rates
-5. **Handles Fallbacks** - Logs unmatched issues for future LLM or manual analysis
+This system implements an intelligent fix generation pipeline that:
+1. Analyzes detected issues using fix templates
+2. Ranks potential fixes by impact, confidence, effort, and risk
+3. Automatically applies high-confidence, low-risk fixes
+4. Creates remediation tasks in Mission Control
+5. Logs activities and tracks applied fixes
 
 ## Architecture
 
 ```
-┌──────────────┐
-│   Issue      │
-│   Detected   │
-└──────┬───────┘
-       │
-       v
-┌──────────────────────────────┐
-│   RCA Engine                 │
-│   ┌────────────────────┐     │
-│   │ Pattern Matching   │     │
-│   │ - Condition Eval   │     │
-│   │ - Confidence Calc  │     │
-│   └────────────────────┘     │
-└──────┬───────────────────────┘
-       │
-       v
-┌──────────────────────────────┐
-│   RCA Results                │
-│   - Root Cause               │
-│   - Confidence Score         │
-│   - Recommended Actions      │
-└──────────────────────────────┘
+Issue → Fix Templates → Ranking → Auto-Apply Decision → Task Creation → Activity Logging
 ```
 
-## Database Schema
+### Components
 
-### `failure_patterns` Table
+#### 1. Fix Templates (`fix-templates/`)
+Modular templates that evaluate applicability and generate fixes.
 
-Stores known failure patterns for root cause analysis.
+**Available Templates:**
+- **Verification Gate** - Adds commit verification to prevent quality issues
+- **Clarification** - Updates task descriptions with missing requirements
+- **Reassignment** - Routes tasks to less busy or better-skilled agents
 
-**Key Fields:**
-- `id` - Unique pattern identifier
-- `name` - Pattern name
-- `signal_type` - Type of signal (phantom, stuck_task, error, etc.)
-- `conditions` - JSON conditions to evaluate
-- `root_cause` - Identified root cause when pattern matches
-- `recommended_action` - Suggested fix or mitigation
-- `confidence_weight` - Weight applied to confidence calculation (0-1)
-- `match_count` - Number of times pattern has matched
-- `success_count` - Number of successful fixes
-- `last_matched_at` - Last time pattern matched
-
-### `rca_results` Table
-
-Stores root cause analysis results for each analyzed issue.
-
-**Key Fields:**
-- `id` - Unique result identifier
-- `issue_id` - Reference to the analyzed issue
-- `pattern_id` - Matched pattern (null if no match)
-- `root_cause` - Identified or inferred root cause
-- `confidence` - Confidence score (0-1)
-- `analysis_method` - How analysis was performed (pattern_match, llm, etc.)
-- `matched_conditions` - Which conditions matched
-- `recommended_actions` - Array of recommended actions
-- `analyzed_at` - Analysis timestamp
-
-## Pattern Condition Syntax
-
-Patterns use JSON conditions that are evaluated against issue and task data:
-
-```json
-{
-  "signal_contains": "phantom",
-  "agent_role": { "not": "reviewer" },
-  "deliverables_empty": true,
-  "status": "in_progress",
-  "agent_active_tasks": { "gt": 5 },
-  "no_recent_activity": true,
-  "days_since_activity": { "gte": 1 }
-}
+#### 2. Fix Ranking (`fix-ranking.ts`)
+Scores and ranks fixes using the formula:
+```
+score = (impact × confidence) / (effort × risk)
 ```
 
-### Supported Condition Types
+#### 3. Auto-Apply Logic (`fix-ranking.ts`)
+Determines if a fix should be auto-applied based on:
+- Ranking score > 8
+- Risk ≤ 3
+- Confidence ≥ 0.8
+- Category in ['clarification', 'verification_gate']
 
-| Condition | Type | Example | Description |
-|-----------|------|---------|-------------|
-| `signal_contains` | string | `"phantom"` | Issue title/description contains text |
-| `activity_contains` | string | `"blocked by"` | Activity log contains text |
-| `status` | string | `"in_progress"` | Task status equals value |
-| `agent_role` | object | `{"not": "reviewer"}` | Agent role matches condition |
-| `agent_active_tasks` | object | `{"gt": 5}` | Number of active tasks comparison |
-| `deliverables_empty` | boolean | `true` | No deliverables present |
-| `no_recent_activity` | boolean | `true` | No activity in last 24h |
-| `days_stale` | object | `{"gte": 2}` | Days since issue detected |
-| `days_since_activity` | object | `{"gte": 1}` | Days since last activity |
+#### 4. Task Creator (`task-creator.ts`)
+Integrates with Mission Control API to:
+- Create remediation tasks (POST /api/tasks)
+- Log activities to original issue (POST /api/tasks/:id/activities)
+- Record applied fixes in database
 
-### Comparison Operators
+#### 5. Orchestrator (`fix-generator.ts`)
+Coordinates the entire workflow.
 
-- `gt` - Greater than
-- `gte` - Greater than or equal
-- `lt` - Less than
-- `lte` - Less than or equal
-- `not` - Not equal
-- `equals` - Equal
-- `in` - In array
+## Installation
 
-## Initial Patterns
-
-The engine comes pre-configured with three patterns:
-
-### 1. Phantom Implementation - Worker Confusion
-**Signal:** `phantom`  
-**Cause:** Agent reports task complete but no work was done  
-**Action:** Reassign to reviewer; clarify scope
-
-### 2. Stuck Task - Dependency Wait
-**Signal:** `stuck_task`  
-**Cause:** Task blocked by external dependency  
-**Action:** Identify blocker; escalate or parallelize
-
-### 3. Stuck Task - Agent Overload
-**Signal:** `stuck_task`  
-**Cause:** Agent has too many concurrent tasks  
-**Action:** Redistribute tasks; prioritize critical work
+The system is built into Mission Control. No separate installation required.
 
 ## Usage
 
 ### Programmatic API
 
 ```typescript
-import { rcaEngine } from '@/lib/self-healing/rca-engine';
-import { getFailurePatterns } from '@/lib/self-healing/rca-db';
-import type { Issue, RCAAnalysisInput } from '@/lib/self-healing/types';
+import { generateFixes, IssueContext } from '@/lib/self-healing';
 
-// Prepare input
-const input: RCAAnalysisInput = {
-  issue: {
-    id: 'issue-123',
-    title: 'Task stuck with no activity',
-    severity: 'high',
-    status: 'detected',
-    source: 'task-monitor',
-    detected_at: Date.now(),
-    updated_at: Date.now(),
-  },
-  task_data: {
-    id: 'task-456',
-    status: 'in_progress',
-    agent_active_task_count: 8,
-    last_activity_at: Date.now() - (2 * 24 * 60 * 60 * 1000), // 2 days ago
-  },
+const issue: IssueContext = {
+  id: 'issue-123',
+  title: 'Task specification is unclear',
+  description: 'Requirements are ambiguous and need clarification',
+  severity: 'medium',
+  source: 'task-management'
 };
 
-// Get patterns from database
-const db = new Database('self_healing.db');
-const patterns = getFailurePatterns(db);
+// Generate and optionally apply fixes
+const result = await generateFixes(issue, {
+  dry_run: false,      // Set to true for testing
+  auto_apply: true,    // Enable auto-application
+  max_fixes: 3         // Return top 3 fixes
+});
 
-// Analyze
-const analysis = await rcaEngine.analyzeIssue(input, patterns);
-
-console.log('Best match:', analysis.best_match?.pattern.name);
-console.log('Confidence:', analysis.best_match?.confidence);
-console.log('Root cause:', analysis.best_match?.pattern.root_cause);
-console.log('Actions:', analysis.best_match?.recommended_actions);
+console.log(result.summary);
+console.log('Tasks created:', result.created_tasks.length);
 ```
 
-### REST API
-
-#### Analyze an Issue
+### CLI Tool
 
 ```bash
-POST /api/self-healing/rca/analyze
+# Analyze fixes without creating tasks
+tsx src/lib/self-healing/cli.ts analyze
 
-{
-  "issue": {
-    "id": "issue-123",
-    "title": "Task stuck with no activity",
-    "severity": "high",
-    "status": "detected",
-    "source": "task-monitor",
-    "detected_at": 1738876800000,
-    "updated_at": 1738876800000
-  },
-  "task_data": {
-    "id": "task-456",
-    "status": "in_progress",
-    "agent_active_task_count": 8,
-    "last_activity_at": 1738790400000
-  },
-  "signal_type": "stuck_task"
-}
+# Generate fixes (dry run)
+tsx src/lib/self-healing/cli.ts generate --dry-run
+
+# Generate and create tasks (live)
+tsx src/lib/self-healing/cli.ts generate
+
+# Show example issue JSON
+tsx src/lib/self-healing/cli.ts example
+
+# Use custom issue
+tsx src/lib/self-healing/cli.ts generate '{"id":"123","title":"Issue",...}'
 ```
 
-**Response:**
-```json
-{
-  "success": true,
-  "result": {
-    "id": "rca-result-uuid",
-    "issue_id": "issue-123",
-    "pattern_id": "stuck-agent-overload",
-    "root_cause": "Agent is overloaded with too many concurrent tasks",
-    "confidence": 0.8,
-    "recommended_actions": ["Redistribute tasks; reduce agent load"]
-  },
-  "analysis": {
-    "patterns_evaluated": 3,
-    "patterns_matched": 1,
-    "analysis_time_ms": 5,
-    "best_match": {
-      "pattern_name": "Stuck Task - Agent Overload",
-      "confidence": 0.8,
-      "matched_conditions": {
-        "agent_active_tasks": true,
-        "no_recent_activity": true,
-        "days_since_activity": true
-      }
+### API Integration
+
+The system can be integrated into Mission Control's issue detection pipeline:
+
+```typescript
+// When an issue is detected
+const detectedIssue = await detectIssue();
+
+// Generate fixes automatically
+const fixResult = await generateFixes(detectedIssue, {
+  auto_apply: true,
+  assigned_agent_id: 'agent-123',
+  workspace_id: 'workspace-456'
+});
+
+// Fixes are now applied and tasks created
+```
+
+## Fix Templates
+
+### Creating Custom Templates
+
+Extend the `FixTemplate` base class:
+
+```typescript
+import { FixTemplate, IssueContext, GeneratedFix, ApplicabilityScore } from './base';
+
+export class MyCustomTemplate extends FixTemplate {
+  readonly name = 'My Custom Fix';
+  readonly category = 'custom_fix';
+  readonly description = 'Fixes custom issues';
+
+  calculateApplicability(issue: IssueContext): ApplicabilityScore {
+    let score = 0;
+    const reasons: string[] = [];
+    
+    // Evaluate issue relevance
+    if (issue.title.includes('custom')) {
+      score += 0.5;
+      reasons.push('Custom keyword found');
     }
+    
+    return { score, reason: reasons.join('; ') };
+  }
+
+  generateFix(issue: IssueContext): GeneratedFix {
+    return {
+      category: this.category,
+      title: 'Fix for ' + issue.title,
+      description: 'Detailed fix description...',
+      action_data: {
+        type: 'custom_action',
+        // ... action details
+      },
+      metadata: {
+        impact: 7,
+        confidence: 0.85,
+        effort: 3,
+        risk: 2
+      },
+      requires_approval: false
+    };
   }
 }
 ```
 
-#### Get Statistics
+Register in `fix-templates/index.ts`:
 
-```bash
-GET /api/self-healing/rca/stats?include_unmatched=true&confidence_threshold=0.7
+```typescript
+import { MyCustomTemplate } from './my-custom';
+
+export const FIX_TEMPLATES: FixTemplate[] = [
+  // ... existing templates
+  new MyCustomTemplate()
+];
 ```
 
-**Response:**
-```json
-{
-  "patterns": {
-    "total": 3,
-    "active": 3,
-    "statistics": [
-      {
-        "pattern_id": "phantom-worker-confusion",
-        "name": "Phantom Implementation - Worker Confusion",
-        "match_count": 15,
-        "success_count": 12,
-        "success_rate": 80.0
-      }
-    ]
-  },
-  "summary": {
-    "total_matches": 42,
-    "total_successes": 35,
-    "average_success_rate": 83.3
-  },
-  "unmatched_issues": {
-    "count": 5,
-    "confidence_threshold": 0.7,
-    "issues": [
-      {
-        "issue_id": "issue-789",
-        "title": "Unknown error pattern",
-        "source": "api-monitor"
-      }
-    ]
-  }
+## Configuration
+
+### Auto-Apply Criteria
+
+Modify in `fix-ranking.ts`:
+
+```typescript
+export function shouldAutoApply(rankedFix: RankedFix): boolean {
+  // Customize criteria here
+  return (
+    rankedFix.ranking_score > 8 &&
+    rankedFix.metadata.risk <= 3 &&
+    rankedFix.metadata.confidence >= 0.8 &&
+    ['clarification', 'verification_gate'].includes(rankedFix.category)
+  );
 }
 ```
 
-## Performance Requirements
+### Ranking Algorithm
 
-The RCA engine is designed for sub-second analysis:
+The ranking formula can be adjusted in `calculateRankingScore()`:
 
-- **Target:** < 100ms for pattern matching
-- **Typical:** 5-15ms for 3-10 patterns
-- **Maximum:** < 1000ms under load
+```typescript
+// Current: (impact × confidence) / (effort × risk)
+const score = (impact * confidence) / Math.max(effort * risk, 0.1);
+
+// Alternative: Add priority weighting
+const score = ((impact * 2) * confidence) / (effort * risk);
+```
 
 ## Testing
 
-Run the test suite:
+### Run Tests
 
 ```bash
-npm test -- src/lib/self-healing/__tests__/rca-engine.test.ts
+npm test src/lib/self-healing/__tests__/
 ```
 
-Test coverage includes:
-- Pattern matching accuracy (90%+ target)
-- Confidence calculation
-- Multiple pattern matching
-- Inactive pattern filtering
-- Performance benchmarks
-- Edge cases and fallbacks
+### Test Coverage
 
-## Acceptance Criteria
+The test suite covers:
+- ✅ Fix template applicability scoring
+- ✅ Fix generation for each template
+- ✅ Ranking score calculation
+- ✅ Auto-apply decision logic
+- ✅ Edge cases (division by zero, invalid data)
+- ✅ Integration between components
 
-- ✅ Pattern matching engine evaluates JSON conditions
-- ✅ 90%+ of test issues match to correct pattern
-- ✅ RCA results stored with confidence score
-- ✅ Pattern statistics updated (last_matched_at, match_count)
-- ✅ Unmatched issues logged for review
-- ✅ Sub-second analysis time for pattern matching
+## Database Schema
 
-## Future Enhancements
+### `applied_fixes` Table
 
-1. **LLM Fallback** - Use GPT-4 for unmatched issues
-2. **Pattern Learning** - Auto-generate patterns from historical data
-3. **Multi-Pattern Fixes** - Combine actions from multiple matched patterns
-4. **Confidence Tuning** - Machine learning for confidence weights
-5. **Real-time Updates** - WebSocket notifications for RCA results
+Tracks all applied fixes with metadata:
 
-## References
+```sql
+CREATE TABLE applied_fixes (
+    id TEXT PRIMARY KEY,
+    issue_id TEXT NOT NULL,
+    fix_id TEXT NOT NULL,
+    task_id TEXT NOT NULL,
+    category TEXT NOT NULL,
+    template_name TEXT NOT NULL,
+    
+    -- Ranking metadata
+    ranking_score REAL NOT NULL,
+    applicability_score REAL NOT NULL,
+    impact INTEGER NOT NULL,
+    confidence REAL NOT NULL,
+    effort INTEGER NOT NULL,
+    risk INTEGER NOT NULL,
+    
+    -- Application tracking
+    auto_applied INTEGER NOT NULL,
+    applied_at INTEGER NOT NULL,
+    status TEXT DEFAULT 'pending',
+    completed_at INTEGER,
+    
+    -- Outcome
+    outcome TEXT,
+    outcome_notes TEXT,
+    metadata JSON
+);
+```
 
-- Self-Healing Pipeline Specification (docs/Pipeline.md)
-- Database Schema (src/lib/self-healing/db/schema.sql)
-- RCA Types (src/lib/self-healing/types.ts)
-- Pattern Matching Engine (src/lib/self-healing/rca-engine.ts)
+## API Endpoints
+
+### POST /api/tasks
+Creates a new remediation task.
+
+**Request:**
+```json
+{
+  "title": "Fix Title",
+  "description": "Fix description",
+  "status": "inbox",
+  "priority": "high",
+  "metadata": {
+    "source": "self-healing",
+    "issue_id": "issue-123",
+    "fix_category": "clarification"
+  }
+}
+```
+
+### POST /api/tasks/:id/activities
+Logs an activity on a task.
+
+**Request:**
+```json
+{
+  "agent_id": "self-healing-system",
+  "activity_type": "fix_generated",
+  "content": "Generated fix: ...",
+  "metadata": {
+    "fix_category": "clarification",
+    "ranking_score": 9.5
+  }
+}
+```
+
+## Examples
+
+### Example 1: Clarification Fix
+
+**Input Issue:**
+```typescript
+{
+  id: 'issue-001',
+  title: 'Task requirements unclear',
+  description: 'What exactly needs to be implemented?',
+  severity: 'medium',
+  source: 'task-management'
+}
+```
+
+**Generated Fix:**
+- Category: `clarification`
+- Ranking Score: ~11.34 (high)
+- Auto-Apply: Yes (score > 8, risk = 1, confidence = 0.9)
+- Action: Update task description with requirements
+
+### Example 2: Verification Gate
+
+**Input Issue:**
+```typescript
+{
+  id: 'issue-002',
+  title: 'Untested code pushed to production',
+  description: 'Code was deployed without proper testing',
+  severity: 'high',
+  source: 'pipeline'
+}
+```
+
+**Generated Fix:**
+- Category: `verification_gate`
+- Ranking Score: ~8.5
+- Auto-Apply: Yes
+- Action: Add verification gate before commit stage
+
+### Example 3: Reassignment
+
+**Input Issue:**
+```typescript
+{
+  id: 'issue-003',
+  title: 'Agent timeout - task stuck',
+  description: 'Current agent is overloaded and not responding',
+  severity: 'high',
+  source: 'agent-monitoring',
+  metadata: { agent_overloaded: true }
+}
+```
+
+**Generated Fix:**
+- Category: `reassignment`
+- Ranking Score: ~5.0
+- Auto-Apply: No (requires approval)
+- Action: Reassign to available agent
+
+## Monitoring
+
+### Success Metrics
+
+Track in `system_health` table:
+- Total fixes generated
+- Auto-apply rate
+- Fix success rate
+- Average resolution time
+- Fix category distribution
+
+### Sample Query
+
+```sql
+SELECT 
+  category,
+  COUNT(*) as total_applied,
+  SUM(CASE WHEN auto_applied = 1 THEN 1 ELSE 0 END) as auto_applied_count,
+  AVG(ranking_score) as avg_score,
+  AVG(completed_at - applied_at) as avg_completion_time
+FROM applied_fixes
+WHERE applied_at > strftime('%s', 'now', '-7 days')
+GROUP BY category;
+```
+
+## Roadmap
+
+- [ ] Machine learning-based pattern matching
+- [ ] Historical fix success rate tracking
+- [ ] Automatic template tuning based on outcomes
+- [ ] Multi-issue fix bundling
+- [ ] Integration with external issue trackers
+- [ ] Slack/Discord notifications for applied fixes
+- [ ] Web UI for fix management
+
+## Contributing
+
+To add new fix templates:
+1. Create template class in `fix-templates/`
+2. Implement `calculateApplicability()` and `generateFix()`
+3. Add to `FIX_TEMPLATES` array in `index.ts`
+4. Write tests in `__tests__/`
+5. Update this README
+
+## License
+
+Part of Mission Control - see root LICENSE file.
