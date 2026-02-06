@@ -1,22 +1,11 @@
-/**
- * Fix Generator - Main Orchestrator
- * 
- * Coordinates the fix generation workflow:
- * 1. Evaluate issue with all templates
- * 2. Rank applicable fixes
- * 3. Determine auto-apply eligibility
- * 4. Create remediation tasks
- * 5. Log activities
- */
-
 import { IssueContext } from './fix-templates';
-import { rankFixes, getBestAutoApplyFix, generateRankingSummary, shouldAutoApply, RankedFix } from './fix-ranking';
+import { rankFixes, getBestAutoApplyFix, shouldAutoApply, RankedFix } from './fix-ranking';
 import { createRemediationTask, recordAppliedFix, TaskCreationOptions, TaskCreationResult } from './task-creator';
 
 export interface FixGenerationOptions extends TaskCreationOptions {
-  auto_apply?: boolean;           // Enable auto-application of fixes (default: true)
-  max_fixes?: number;             // Maximum number of fixes to generate (default: 3)
-  applicability_threshold?: number; // Minimum applicability score (default: 0.3)
+  auto_apply?: boolean;
+  max_fixes?: number;
+  applicability_threshold?: number;
 }
 
 export interface FixGenerationResult {
@@ -28,9 +17,6 @@ export interface FixGenerationResult {
   dry_run: boolean;
 }
 
-/**
- * Generate and optionally apply fixes for an issue
- */
 export async function generateFixes(
   issue: IssueContext,
   options: FixGenerationOptions = {}
@@ -43,13 +29,11 @@ export async function generateFixes(
     ...taskOptions
   } = options;
 
-  // Step 1: Rank all applicable fixes
   const rankedFixes = rankFixes(issue, {
     top_n: max_fixes,
     applicability_threshold
   });
 
-  // Step 2: Check for auto-apply candidate
   let auto_applied_fix: RankedFix | undefined;
   const created_tasks: TaskCreationResult[] = [];
 
@@ -57,18 +41,16 @@ export async function generateFixes(
     const bestAutoFix = getBestAutoApplyFix(issue);
     
     if (bestAutoFix) {
-      // Auto-apply the best fix
       const result = await createRemediationTask(issue, bestAutoFix, {
         ...taskOptions,
         dry_run,
-        priority: 'high' // Auto-applied fixes get higher priority
+        priority: 'high'
       });
 
       if (result.success) {
         auto_applied_fix = bestAutoFix;
         created_tasks.push(result);
 
-        // Record the applied fix
         if (!dry_run && result.task) {
           await recordAppliedFix(
             issue.id,
@@ -82,7 +64,6 @@ export async function generateFixes(
     }
   }
 
-  // Step 3: Create tasks for other high-ranking fixes (that weren't auto-applied)
   const remainingFixes = rankedFixes.filter(fix => fix !== auto_applied_fix);
   
   for (const fix of remainingFixes) {
@@ -95,7 +76,6 @@ export async function generateFixes(
     if (result.success) {
       created_tasks.push(result);
 
-      // Record the fix (not auto-applied)
       if (!dry_run && result.task) {
         await recordAppliedFix(
           issue.id,
@@ -108,8 +88,7 @@ export async function generateFixes(
     }
   }
 
-  // Step 4: Generate summary
-  const summary = generateFixGenerationSummary(issue, rankedFixes, auto_applied_fix, created_tasks, dry_run);
+  const summary = generateSummary(issue, rankedFixes, auto_applied_fix, created_tasks, dry_run);
 
   return {
     issue_id: issue.id,
@@ -121,10 +100,7 @@ export async function generateFixes(
   };
 }
 
-/**
- * Generate a comprehensive summary of the fix generation process
- */
-function generateFixGenerationSummary(
+function generateSummary(
   issue: IssueContext,
   rankedFixes: RankedFix[],
   autoAppliedFix: RankedFix | undefined,
@@ -148,14 +124,11 @@ function generateFixGenerationSummary(
   lines.push(`## Generated Fixes: ${rankedFixes.length}`);
   lines.push('');
 
-  // Auto-applied fix section
   if (autoAppliedFix) {
     lines.push('### ✅ Auto-Applied Fix');
     lines.push(`**${autoAppliedFix.title}**`);
     lines.push(`- Category: ${autoAppliedFix.category}`);
     lines.push(`- Ranking Score: ${autoAppliedFix.ranking_score}`);
-    lines.push(`- Confidence: ${(autoAppliedFix.metadata.confidence * 100).toFixed(0)}%`);
-    lines.push(`- Risk Level: ${autoAppliedFix.metadata.risk}/10`);
     
     const autoTask = createdTasks.find(t => t.task?.title === autoAppliedFix.title);
     if (autoTask?.task) {
@@ -164,7 +137,6 @@ function generateFixGenerationSummary(
     lines.push('');
   }
 
-  // Other fixes section
   const otherFixes = rankedFixes.filter(f => f !== autoAppliedFix);
   if (otherFixes.length > 0) {
     lines.push('### 📋 Additional Recommended Fixes');
@@ -185,7 +157,6 @@ function generateFixGenerationSummary(
     });
   }
 
-  // Summary statistics
   lines.push('---');
   lines.push('');
   lines.push('### Statistics');
@@ -197,9 +168,6 @@ function generateFixGenerationSummary(
   return lines.join('\n');
 }
 
-/**
- * Quick helper to generate and display fixes without creating tasks
- */
 export async function analyzeFixes(
   issue: IssueContext,
   options?: Pick<FixGenerationOptions, 'max_fixes' | 'applicability_threshold'>

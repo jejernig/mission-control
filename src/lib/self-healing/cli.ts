@@ -1,18 +1,7 @@
 #!/usr/bin/env node
-/**
- * Self-Healing Fix Generation CLI
- * 
- * Command-line tool for testing and running the fix generation system.
- * 
- * Usage:
- *   tsx src/lib/self-healing/cli.ts analyze <issue-json>
- *   tsx src/lib/self-healing/cli.ts generate <issue-json> [--dry-run] [--no-auto-apply]
- */
-
 import type { IssueContext } from './fix-templates/base';
 import { generateFixes, analyzeFixes } from './fix-generator';
 
-// Mock issue for testing
 const EXAMPLE_ISSUE: IssueContext = {
   id: 'test-issue-001',
   title: 'Task specification is unclear and missing acceptance criteria',
@@ -35,31 +24,17 @@ async function main() {
 Self-Healing Fix Generation CLI
 
 Usage:
-  tsx src/lib/self-healing/cli.ts analyze [issue-json]
-  tsx src/lib/self-healing/cli.ts generate [issue-json] [--dry-run] [--no-auto-apply]
-  tsx src/lib/self-healing/cli.ts example
-
-Commands:
-  analyze     Analyze and rank fixes without creating tasks
-  generate    Generate and create remediation tasks
-  example     Show example issue JSON
-
-Options:
-  --dry-run         Don't actually create tasks (default for analyze)
-  --no-auto-apply   Disable auto-application of fixes
-
-Example:
-  tsx src/lib/self-healing/cli.ts analyze
-  tsx src/lib/self-healing/cli.ts generate --dry-run
+  npx tsx src/lib/self-healing/cli.ts analyze [issue-json]
+  npx tsx src/lib/self-healing/cli.ts generate [issue-json] [--dry-run]
+  npx tsx src/lib/self-healing/cli.ts example
     `);
     process.exit(0);
   }
 
-  // Parse issue from args or use example
   let issue: IssueContext;
   const issueArg = args[1];
   
-  if (issueArg && issueArg !== '--dry-run' && issueArg !== '--no-auto-apply') {
+  if (issueArg && issueArg !== '--dry-run') {
     try {
       issue = JSON.parse(issueArg);
     } catch (error) {
@@ -71,9 +46,7 @@ Example:
     issue = EXAMPLE_ISSUE;
   }
 
-  // Parse options
   const dryRun = args.includes('--dry-run');
-  const autoApply = !args.includes('--no-auto-apply');
 
   try {
     switch (command) {
@@ -94,10 +67,7 @@ Example:
         console.log(`🔧 Generating fixes for issue... ${dryRun ? '(DRY RUN)' : ''}\n`);
         console.log(`Issue: ${issue.title}\n`);
         
-        const result = await generateFixes(issue, {
-          dry_run: dryRun,
-          auto_apply: autoApply
-        });
+        const result = await generateFixes(issue, { dry_run: dryRun });
         
         console.log(result.summary);
         
