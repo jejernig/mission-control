@@ -79,7 +79,7 @@ export class MissionControlClient {
    */
   getDeliverablesByTask(taskId: string): Deliverable[] {
     const stmt = this.db.prepare(`
-      SELECT * FROM deliverables 
+      SELECT * FROM task_deliverables 
       WHERE task_id = ?
       ORDER BY created_at DESC
     `);
@@ -91,7 +91,7 @@ export class MissionControlClient {
    */
   getLastActivityForTask(taskId: string): Activity | null {
     const stmt = this.db.prepare(`
-      SELECT * FROM activities 
+      SELECT * FROM task_activities 
       WHERE task_id = ?
       ORDER BY created_at DESC
       LIMIT 1
@@ -106,7 +106,7 @@ export class MissionControlClient {
     const cutoffTime = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
     
     const stmt = this.db.prepare(`
-      SELECT * FROM activities 
+      SELECT * FROM task_activities 
       WHERE created_at > ?
       ORDER BY created_at DESC
     `);
@@ -118,7 +118,7 @@ export class MissionControlClient {
    */
   getActivitiesByTask(taskId: string): Activity[] {
     const stmt = this.db.prepare(`
-      SELECT * FROM activities 
+      SELECT * FROM task_activities 
       WHERE task_id = ?
       ORDER BY created_at ASC
     `);
