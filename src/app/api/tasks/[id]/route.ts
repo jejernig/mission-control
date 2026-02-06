@@ -84,6 +84,10 @@ export async function PATCH(
       updates.push('due_date = ?');
       values.push(body.due_date);
     }
+    if (body.workspace_id !== undefined) {
+      updates.push('workspace_id = ?');
+      values.push(body.workspace_id);
+    }
 
     // Track if we need to dispatch task
     let shouldDispatch = false;

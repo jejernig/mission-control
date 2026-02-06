@@ -238,6 +238,7 @@ export interface CreateTaskRequest {
   priority?: TaskPriority;
   assigned_agent_id?: string;
   created_by_agent_id?: string;
+  workspace_id?: string;
   business_id?: string;
   due_date?: string;
 }
