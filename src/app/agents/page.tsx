@@ -1,57 +1,23 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, Suspense } from 'react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import type { Agent, Workspace } from '@/lib/types';
-
-interface WorkspaceRow extends Workspace {
-  // ensure organization_id is present even if types lag
-  organization_id?: string | null;
-}
+import { useWorkspaces } from '@/hooks/queries/useWorkspaces';
+import { useAgents, useUpdateAgent } from '@/hooks/queries/useAgents';
+import { AgentsListSkeleton } from '@/components/LoadingSkeletons';
+import type { Agent } from '@/lib/types';
 
 type SelectedRow = 'org' | string; // 'org' = org-wide row, or workspace_id
 
 function AgentsPageContent() {
-  const [workspaces, setWorkspaces] = useState<WorkspaceRow[]>([]);
-  const [agents, setAgents] = useState<Agent[]>([]);
+  // Use Suspense-enabled queries - no manual loading state needed!
+  const { data: workspaces = [] } = useWorkspaces(false);
+  const { data: agents = [] } = useAgents();
+  const updateAgent = useUpdateAgent();
+  
   const [selectedRow, setSelectedRow] = useState<SelectedRow>('org');
-  const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  // Load workspaces + agents
-  useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const [wsRes, agentsRes] = await Promise.all([
-          fetch('/api/workspaces'),
-          fetch('/api/agents'),
-        ]);
-
-        if (!wsRes.ok) throw new Error('Failed to load workspaces');
-        if (!agentsRes.ok) throw new Error('Failed to load agents');
-
-        const wsData = (await wsRes.json()) as WorkspaceRow[];
-        const agentsData = (await agentsRes.json()) as Agent[];
-
-        setWorkspaces(wsData);
-        setAgents(agentsData);
-
-        // Default selection: org row
-        setSelectedRow('org');
-      } catch (e) {
-        console.error('Failed to load agents page:', e);
-        setError('Failed to load agents or workspaces');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    load();
-  }, []);
 
   const _orgId = workspaces.find((w) => w.id === 'default')?.organization_id ?? 'org-default';
 
@@ -70,14 +36,10 @@ function AgentsPageContent() {
     try {
       setSavingId(agent.id);
       setError(null);
-      const res = await fetch(`/api/agents/${agent.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspace_id: null }),
+      await updateAgent.mutateAsync({
+        agentId: agent.id,
+        updates: { workspace_id: null },
       });
-      if (!res.ok) throw new Error('PATCH failed');
-      const updated = (await res.json()) as Agent;
-      setAgents((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
     } catch (e) {
       console.error('Failed to promote agent to org:', e);
       setError('Failed to promote agent to org-wide');
@@ -90,26 +52,16 @@ function AgentsPageContent() {
     try {
       setSavingId(agent.id);
       setError(null);
-      const res = await fetch(`/api/agents/${agent.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspace_id: workspaceId }),
+      await updateAgent.mutateAsync({
+        agentId: agent.id,
+        updates: { workspace_id: workspaceId },
       });
-      if (!res.ok) throw new Error('PATCH failed');
-      const updated = (await res.json()) as Agent;
-      setAgents((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
     } catch (e) {
       console.error('Failed to demote agent to workspace:', e);
       setError('Failed to assign agent to workspace');
     } finally {
       setSavingId(null);
     }
-  }
-
-  if (loading) {
-    return (
-      <div className="p-6 text-mc-text-secondary">Loading agents...</div>
-    );
   }
 
   if (error) {
@@ -304,7 +256,23 @@ function AgentsPageContent() {
 export default function AgentsPage() {
   return (
     <ErrorBoundary>
-      <AgentsPageContent />
+      <Suspense fallback={
+        <div className="flex h-full">
+          <aside className="w-64 border-r border-mc-border bg-mc-bg-secondary p-3">
+            <div className="h-4 bg-mc-bg-tertiary rounded w-2/3 mb-3 animate-pulse"></div>
+            <div className="space-y-2">
+              <div className="h-8 bg-mc-bg-tertiary rounded animate-pulse"></div>
+              <div className="h-8 bg-mc-bg-tertiary rounded animate-pulse"></div>
+              <div className="h-8 bg-mc-bg-tertiary rounded animate-pulse"></div>
+            </div>
+          </aside>
+          <main className="flex-1 p-4">
+            <AgentsListSkeleton rows={5} />
+          </main>
+        </div>
+      }>
+        <AgentsPageContent />
+      </Suspense>
     </ErrorBoundary>
   );
 }

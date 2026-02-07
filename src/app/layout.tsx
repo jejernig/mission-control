@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { ErrorBoundaryProvider } from '@/components/ErrorBoundaryProvider';
+import { QueryProvider } from '@/providers/QueryProvider';
 
 export const metadata: Metadata = {
   title: 'Mission Control',
@@ -24,7 +25,9 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-mc-bg text-mc-text min-h-screen">
-        <ErrorBoundaryProvider>{children}</ErrorBoundaryProvider>
+        <QueryProvider>
+          <ErrorBoundaryProvider>{children}</ErrorBoundaryProvider>
+        </QueryProvider>
       </body>
     </html>
   );

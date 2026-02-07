@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { Plus } from 'lucide-react';
 import { AsyncWorkspaceList } from './AsyncWorkspaceList';
+import { WorkspaceGridSkeleton } from './LoadingSkeletons';
 
 export function WorkspaceDashboard() {
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -42,7 +43,9 @@ export function WorkspaceDashboard() {
           </p>
         </div>
 
-        <AsyncWorkspaceList key={refreshKey} onDelete={handleDelete} />
+        <Suspense fallback={<WorkspaceGridSkeleton count={3} />}>
+          <AsyncWorkspaceList key={refreshKey} onDelete={handleDelete} />
+        </Suspense>
       </main>
 
       {/* Create Modal */}

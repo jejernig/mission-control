@@ -1,39 +1,34 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { WorkspaceCardSkeleton } from './WorkspaceCardSkeleton';
-import type { WorkspaceStats } from '@/lib/types';
+import { useState } from 'react';
+import { useWorkspaces, type WorkspaceWithChildren } from '@/hooks/queries/useWorkspaces';
 import Link from 'next/link';
 import { ArrowRight, CheckSquare, Users, Trash2, AlertTriangle } from 'lucide-react';
 
-interface WorkspaceWithChildren extends WorkspaceStats {
-  parent_id?: string | null;
-  children?: WorkspaceWithChildren[];
-}
-
-function buildWorkspaceTree(workspaces: WorkspaceWithChildren[]): WorkspaceWithChildren[] {
-  const map = new Map<string, WorkspaceWithChildren>();
-  const roots: WorkspaceWithChildren[] = [];
-  
-  workspaces.forEach(w => map.set(w.id, { ...w, children: [] }));
-  
-  workspaces.forEach(w => {
-    const node = map.get(w.id)!;
-    if (w.parent_id && map.has(w.parent_id)) {
-      map.get(w.parent_id)!.children!.push(node);
-    } else {
-      roots.push(node);
-    }
-  });
-  
-  return roots;
-}
+// Unused - kept for future hierarchical view
+// function buildWorkspaceTree(workspaces: WorkspaceWithChildren[]): WorkspaceWithChildren[] {
+//   const map = new Map<string, WorkspaceWithChildren>();
+//   const roots: WorkspaceWithChildren[] = [];
+//   
+//   workspaces.forEach(w => map.set(w.id, { ...w, children: [] }));
+//   
+//   workspaces.forEach(w => {
+//     const node = map.get(w.id)!;
+//     if (w.parent_id && map.has(w.parent_id)) {
+//       map.get(w.parent_id)!.children!.push(node);
+//     } else {
+//       roots.push(node);
+//     }
+//   });
+//   
+//   return roots;
+// }
 
 function WorkspaceCard({ 
   workspace, 
   onDelete 
 }: { 
-  workspace: WorkspaceStats; 
+  workspace: WorkspaceWithChildren; 
   onDelete: (id: string) => void;
 }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -152,39 +147,10 @@ function WorkspaceCard({
 }
 
 export function AsyncWorkspaceList({ onDelete }: { onDelete: (id: string) => void }) {
-  const [workspaces, setWorkspaces] = useState<WorkspaceWithChildren[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Use Suspense-enabled query - no manual loading state needed!
+  const { data: workspaces } = useWorkspaces(true);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch('/api/workspaces?stats=true');
-        if (res.ok) {
-          const data = await res.json();
-          setWorkspaces(data);
-        }
-      } catch (error) {
-        console.error('Failed to load workspaces:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <WorkspaceCardSkeleton />
-        <WorkspaceCardSkeleton />
-        <WorkspaceCardSkeleton />
-      </div>
-    );
-  }
-
-  const workspaceTree = buildWorkspaceTree(workspaces);
-
-  if (workspaces.length === 0) {
+  if (!workspaces || workspaces.length === 0) {
     return (
       <div className="text-center py-8 text-mc-text-secondary">
         No workspaces found
@@ -192,16 +158,16 @@ export function AsyncWorkspaceList({ onDelete }: { onDelete: (id: string) => voi
     );
   }
 
+  // Show all workspaces in flat view (sorted by name)
+  const sortedWorkspaces = [...workspaces].sort((a, b) => a.name.localeCompare(b.name));
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {workspaceTree.map((workspace) => (
+      {sortedWorkspaces.map((workspace) => (
         <WorkspaceCard 
           key={workspace.id} 
           workspace={workspace}
-          onDelete={() => {
-            onDelete(workspace.id);
-            setWorkspaces(workspaces.filter(w => w.id !== workspace.id));
-          }}
+          onDelete={onDelete}
         />
       ))}
     </div>
