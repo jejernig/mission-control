@@ -170,7 +170,7 @@ export class TaskAnalyzer {
   /**
    * Detect the primary domain
    */
-  private detectDomain(text: string, _keywords: string[]): { name: string; score: number } {
+  private detectDomain(text: string, keywords: string[]): { name: string; score: number } {
     const scores = new Map<string, number>();
 
     for (const [domain, patterns] of Object.entries(DOMAIN_PATTERNS)) {
@@ -201,7 +201,7 @@ export class TaskAnalyzer {
   /**
    * Detect the primary layer
    */
-  private detectLayer(text: string, _keywords: string[]): { name: string; score: number } {
+  private detectLayer(text: string, keywords: string[]): { name: string; score: number } {
     const scores = new Map<string, number>();
 
     for (const [layer, patterns] of Object.entries(LAYER_PATTERNS)) {
@@ -228,7 +228,7 @@ export class TaskAnalyzer {
   /**
    * Detect required skills
    */
-  private detectSkills(text: string, __keywords: string[]): string[] {
+  private detectSkills(text: string, _keywords: string[]): string[] {
     const detectedSkills: string[] = [];
 
     for (const [skill, patterns] of Object.entries(SKILL_PATTERNS)) {

@@ -48,7 +48,7 @@ export class AgentMatcher {
     const _db = getDb();
 
     // Get agents in workspace (both workspace-scoped and org-scoped)
-    const agents = db.prepare(`
+    const agents = _db.prepare(`
       SELECT a.*
       FROM agents a
       JOIN workspaces w ON w.id = ?
@@ -61,7 +61,7 @@ export class AgentMatcher {
 
     // Get capabilities for each agent
     return agents.map(agent => {
-      const capabilities = db.prepare(`
+      const capabilities = _db.prepare(`
         SELECT * FROM agent_capabilities
         WHERE agent_id = ?
       `).all(agent.id) as AgentCapability[];
@@ -150,10 +150,10 @@ export class AgentMatcher {
     const _db = getDb();
 
     // Clear existing suggestions for this task
-    db.prepare('DELETE FROM assignment_suggestions WHERE task_id = ?').run(taskId);
+    _db.prepare('DELETE FROM assignment_suggestions WHERE task_id = ?').run(taskId);
 
     // Insert new suggestions
-    const insertStmt = db.prepare(`
+    const insertStmt = _db.prepare(`
       INSERT INTO assignment_suggestions (id, task_id, agent_id, confidence, reasoning)
       VALUES (?, ?, ?, ?, ?)
     `);
@@ -170,7 +170,7 @@ export class AgentMatcher {
   async getSuggestions(taskId: string): Promise<AgentMatch[]> {
     const _db = getDb();
 
-    const suggestions = db.prepare(`
+    const suggestions = _db.prepare(`
       SELECT 
         s.*,
         a.id as agent_id,
@@ -224,7 +224,7 @@ export class AgentMatcher {
 
     const id = `hist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
-    db.prepare(`
+    _db.prepare(`
       INSERT INTO assignment_history (id, task_id, agent_id, outcome, metadata)
       VALUES (?, ?, ?, ?, ?)
     `).run(

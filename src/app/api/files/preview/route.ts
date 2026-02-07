@@ -3,20 +3,26 @@
  * Serves local files for preview (HTML only for security)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { readFileSync, existsSync } from 'fs';
 import path from 'path';
+import {
+  withErrorHandler,
+  badRequest,
+  forbidden,
+  notFound,
+  getRequiredSearchParam
+} from '@/lib/api-utils';
 
-export async function GET(request: NextRequest) {
-  const filePath = request.nextUrl.searchParams.get('path');
-
-  if (!filePath) {
-    return NextResponse.json({ error: 'path is required' }, { status: 400 });
-  }
+export const GET = withErrorHandler(async (request) => {
+  const filePathParam = getRequiredSearchParam(request, 'path');
+  if (filePathParam instanceof NextResponse) return filePathParam;
+  
+  const filePath = filePathParam;
 
   // Only allow HTML files
   if (!filePath.endsWith('.html') && !filePath.endsWith('.htm')) {
-    return NextResponse.json({ error: 'Only HTML files can be previewed' }, { status: 400 });
+    return badRequest('Only HTML files can be previewed');
   }
 
   // Expand tilde and normalize
@@ -34,22 +40,17 @@ export async function GET(request: NextRequest) {
   );
 
   if (!isAllowed) {
-    return NextResponse.json({ error: 'Path not allowed' }, { status: 403 });
+    return forbidden('Path not allowed');
   }
 
   if (!existsSync(normalizedPath)) {
-    return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    return notFound('File');
   }
 
-  try {
-    const content = readFileSync(normalizedPath, 'utf-8');
-    return new NextResponse(content, {
-      headers: {
-        'Content-Type': 'text/html',
-      },
-    });
-  } catch (error) {
-    console.error('[FILE] Error reading file:', error);
-    return NextResponse.json({ error: 'Failed to read file' }, { status: 500 });
-  }
-}
+  const content = readFileSync(normalizedPath, 'utf-8');
+  return new NextResponse(content, {
+    headers: {
+      'Content-Type': 'text/html',
+    },
+  });
+});

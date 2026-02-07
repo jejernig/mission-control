@@ -68,7 +68,7 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
           onSpecLocked();
         }
       }
-    } catch {
+    } catch (err) {
       console.error('Failed to load planning state:', err);
       setError('Failed to load planning state');
     } finally {
@@ -100,7 +100,8 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
       } else {
         setError(data.error || 'Failed to start planning');
       }
-    } catch {
+    } catch (err) {
+      console.error('Failed to start planning:', err);
       setError('Failed to start planning');
     } finally {
       setStarting(false);
@@ -153,7 +154,8 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
       } else {
         setError(data.error || 'Failed to submit answer');
       }
-    } catch {
+    } catch (err) {
+      console.error('Failed to submit answer:', err);
       setError('Failed to submit answer');
     } finally {
       setSubmitting(false);

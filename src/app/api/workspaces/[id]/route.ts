@@ -11,7 +11,7 @@ import {
 } from '@/lib/api-utils';
 
 // GET /api/workspaces/[id] - Get a single workspace
-export const GET = withErrorHandler(async (request, context) => {
+export const GET = withErrorHandler<{ params: Promise<{ id: string }> }>(async (request, context) => {
   const { id } = await extractParams<{ id: string }>(context);
   const db = getDb();
   
@@ -27,7 +27,7 @@ export const GET = withErrorHandler(async (request, context) => {
 });
 
 // PATCH /api/workspaces/[id] - Update a workspace
-export const PATCH = withErrorHandler(async (request, context) => {
+export const PATCH = withErrorHandler<{ params: Promise<{ id: string }> }>(async (request, context) => {
   const { id } = await extractParams<{ id: string }>(context);
   const body = await request.json();
   const { name, description, icon, github_repo, parent_id } = body;
@@ -63,7 +63,7 @@ export const PATCH = withErrorHandler(async (request, context) => {
 });
 
 // DELETE /api/workspaces/[id] - Delete a workspace
-export const DELETE = withErrorHandler(async (request, context) => {
+export const DELETE = withErrorHandler<{ params: Promise<{ id: string }> }>(async (request, context) => {
   const { id } = await extractParams<{ id: string }>(context);
   const db = getDb();
   

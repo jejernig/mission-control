@@ -14,7 +14,7 @@ import {
 } from '@/lib/api-utils';
 
 // GET /api/tasks/[id] - Get a single task
-export const GET = withErrorHandler(async (request, context) => {
+export const GET = withErrorHandler<{ params: Promise<{ id: string }> }>(async (request, context) => {
   const { id } = await extractParams<{ id: string }>(context);
   const task = queryOne<Task>(
     `SELECT t.*,
@@ -33,7 +33,7 @@ export const GET = withErrorHandler(async (request, context) => {
 });
 
 // PATCH /api/tasks/[id] - Update a task
-export const PATCH = withErrorHandler(async (request, context) => {
+export const PATCH = withErrorHandler<{ params: Promise<{ id: string }> }>(async (request, context) => {
   const { id } = await extractParams<{ id: string }>(context);
   const body: UpdateTaskRequest & { updated_by_agent_id?: string } = await request.json();
 
@@ -239,7 +239,7 @@ export const PATCH = withErrorHandler(async (request, context) => {
 });
 
 // DELETE /api/tasks/[id] - Delete a task
-export const DELETE = withErrorHandler(async (request, context) => {
+export const DELETE = withErrorHandler<{ params: Promise<{ id: string }> }>(async (request, context) => {
   const { id } = await extractParams<{ id: string }>(context);
   const existing = queryOne<Task>('SELECT * FROM tasks WHERE id = ?', [id]);
 

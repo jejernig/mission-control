@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import type { TaskActivity } from '@/lib/types';
+import { formatTimestamp } from '@/lib/client-utils';
 
 interface ActivityLogProps {
   taskId: string;
@@ -49,37 +50,6 @@ export function ActivityLog({ taskId }: ActivityLogProps) {
       default:
         return '📝';
     }
-  };
-
-  const formatTimestamp = (timestamp: string) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    
-    // Less than 1 minute
-    if (diff < 60000) {
-      return 'just now';
-    }
-    
-    // Less than 1 hour
-    if (diff < 3600000) {
-      const mins = Math.floor(diff / 60000);
-      return `${mins} min${mins > 1 ? 's' : ''} ago`;
-    }
-    
-    // Less than 24 hours
-    if (diff < 86400000) {
-      const hours = Math.floor(diff / 3600000);
-      return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-    }
-    
-    // More than 24 hours
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
   };
 
   if (loading) {

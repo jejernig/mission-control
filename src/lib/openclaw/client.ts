@@ -3,6 +3,21 @@
 import { EventEmitter } from 'events';
 import type { OpenClawMessage, OpenClawSessionInfo } from '../types';
 
+// Support both browser and Node.js WebSocket
+let WebSocketImpl: typeof WebSocket;
+if (typeof WebSocket !== 'undefined') {
+  WebSocketImpl = WebSocket;
+} else {
+  // Node.js environment - use ws package
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const WS = require('ws');
+    WebSocketImpl = WS as typeof WebSocket;
+  } catch {
+    throw new Error('WebSocket not available. Install ws package: npm install ws');
+  }
+}
+
 const GATEWAY_URL = process.env.OPENCLAW_GATEWAY_URL || 'ws://127.0.0.1:18789';
 const GATEWAY_TOKEN = process.env.OPENCLAW_GATEWAY_TOKEN || '';
 
@@ -57,7 +72,7 @@ export class OpenClawClient extends EventEmitter {
         }
         console.log('[OpenClaw] Connecting to:', wsUrl.toString().replace(/token=[^&]+/, 'token=***'));
         console.log('[OpenClaw] Token in URL:', wsUrl.searchParams.has('token'));
-        this.ws = new WebSocket(wsUrl.toString());
+        this.ws = new WebSocketImpl(wsUrl.toString()) as WebSocket;
 
         const connectionTimeout = setTimeout(() => {
           if (!this.connected) {
@@ -257,6 +272,14 @@ export class OpenClawClient extends EventEmitter {
 
   async createSession(channel: string, peer?: string): Promise<OpenClawSessionInfo> {
     return this.call<OpenClawSessionInfo>('sessions.create', { channel, peer });
+  }
+
+  // Wake Jarvis to process pending work
+  async wake(text?: string): Promise<void> {
+    await this.call('wake', { 
+      text: text || 'Spawn requests pending - process immediately',
+      mode: 'now' 
+    });
   }
 
   // Node methods (device capabilities)

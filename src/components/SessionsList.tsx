@@ -8,6 +8,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { Bot, CheckCircle, Circle, XCircle, Trash2, Check, Zap, RefreshCw } from 'lucide-react';
+import { formatTimestamp, formatTokens } from '@/lib/client-utils';
 
 interface SessionWithAgent {
   id: string;
@@ -136,26 +137,6 @@ export function SessionsList({ taskId }: SessionsListProps) {
     }
   };
 
-  const formatTimestamp = (timestamp: string) => {
-    const date = new Date(timestamp);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-  };
-
-  const formatTokens = (tokens?: number) => {
-    if (!tokens) return null;
-    if (tokens >= 1000000) {
-      return `${(tokens / 1000000).toFixed(1)}M tokens`;
-    } else if (tokens >= 1000) {
-      return `${(tokens / 1000).toFixed(1)}K tokens`;
-    }
-    return `${tokens} tokens`;
-  };
-
   const handleMarkComplete = async (sessionId: string) => {
     try {
       const res = await fetch(`/api/openclaw/sessions/${sessionId}`, {
@@ -244,8 +225,6 @@ export function SessionsList({ taskId }: SessionsListProps) {
                 session={session}
                 getStatusIcon={getStatusIcon}
                 formatDuration={formatDuration}
-                formatTimestamp={formatTimestamp}
-                formatTokens={formatTokens}
                 onMarkComplete={handleMarkComplete}
                 onDelete={handleDelete}
               />
@@ -269,8 +248,6 @@ export function SessionsList({ taskId }: SessionsListProps) {
                 session={session}
                 getStatusIcon={getStatusIcon}
                 formatDuration={formatDuration}
-                formatTimestamp={formatTimestamp}
-                formatTokens={formatTokens}
                 onMarkComplete={handleMarkComplete}
                 onDelete={handleDelete}
               />
@@ -287,16 +264,12 @@ function SessionCard({
   session,
   getStatusIcon,
   formatDuration,
-  formatTimestamp,
-  formatTokens,
   onMarkComplete,
   onDelete,
 }: {
   session: SessionWithAgent;
   getStatusIcon: (status: string, isLive?: boolean) => React.ReactNode;
   formatDuration: (start: string, end?: string | null) => string;
-  formatTimestamp: (timestamp: string) => string;
-  formatTokens: (tokens?: number) => string | null;
   onMarkComplete: (sessionId: string) => void;
   onDelete: (sessionId: string) => void;
 }) {

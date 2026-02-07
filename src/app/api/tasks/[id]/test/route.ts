@@ -316,7 +316,7 @@ async function testDeliverable(
           cssErrors: [],
           resourceErrors: [],
           screenshotPath: null,
-          duration: Date.now() - startTime,
+          duration: Date.now() - _startTime,
           error: 'File not found'
         };
       }
@@ -337,7 +337,7 @@ async function testDeliverable(
           cssErrors: [],
           resourceErrors: [],
           screenshotPath: null,
-          duration: Date.now() - startTime,
+          duration: Date.now() - _startTime,
           error: 'Skipped - not an HTML file'
         };
       }
@@ -370,7 +370,7 @@ async function testDeliverable(
             cssErrors: [],
             resourceErrors: [],
             screenshotPath: null,
-            duration: Date.now() - startTime,
+            duration: Date.now() - _startTime,
             error: 'Path not found'
           };
         }
@@ -457,7 +457,7 @@ async function testDeliverable(
       cssErrors,
       resourceErrors,
       screenshotPath,
-      duration: Date.now() - startTime
+      duration: Date.now() - _startTime
     };
   } catch (error) {
     return {
@@ -474,7 +474,7 @@ async function testDeliverable(
       cssErrors,
       resourceErrors,
       screenshotPath,
-      duration: Date.now() - startTime,
+      duration: Date.now() - _startTime,
       error: String(error)
     };
   }

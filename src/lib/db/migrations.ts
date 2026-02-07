@@ -33,7 +33,7 @@ const migrations: Migration[] = [
       console.log('[Migration 002] Adding workspaces table and columns...');
       
       // Create workspaces table if not exists
-      db.exec(`
+      _db.exec(`
         CREATE TABLE IF NOT EXISTS workspaces (
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
@@ -46,24 +46,24 @@ const migrations: Migration[] = [
       `);
       
       // Insert default workspace if not exists
-      db.exec(`
+      _db.exec(`
         INSERT OR IGNORE INTO workspaces (id, name, slug, description, icon) 
         VALUES ('default', 'Default Workspace', 'default', 'Default workspace', '🏠');
       `);
       
       // Add workspace_id to tasks if not exists
-      const tasksInfo = db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[];
+      const tasksInfo = _db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[];
       if (!tasksInfo.some(col => col.name === 'workspace_id')) {
-        db.exec(`ALTER TABLE tasks ADD COLUMN workspace_id TEXT DEFAULT 'default' REFERENCES workspaces(id)`);
-        db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_workspace ON tasks(workspace_id)`);
+        _db.exec(`ALTER TABLE tasks ADD COLUMN workspace_id TEXT DEFAULT 'default' REFERENCES workspaces(id)`);
+        _db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_workspace ON tasks(workspace_id)`);
         console.log('[Migration 002] Added workspace_id to tasks');
       }
       
       // Add workspace_id to agents if not exists
-      const agentsInfo = db.prepare("PRAGMA table_info(agents)").all() as { name: string }[];
+      const agentsInfo = _db.prepare("PRAGMA table_info(agents)").all() as { name: string }[];
       if (!agentsInfo.some(col => col.name === 'workspace_id')) {
-        db.exec(`ALTER TABLE agents ADD COLUMN workspace_id TEXT DEFAULT 'default' REFERENCES workspaces(id)`);
-        db.exec(`CREATE INDEX IF NOT EXISTS idx_agents_workspace ON agents(workspace_id)`);
+        _db.exec(`ALTER TABLE agents ADD COLUMN workspace_id TEXT DEFAULT 'default' REFERENCES workspaces(id)`);
+        _db.exec(`CREATE INDEX IF NOT EXISTS idx_agents_workspace ON agents(workspace_id)`);
         console.log('[Migration 002] Added workspace_id to agents');
       }
     }
@@ -75,7 +75,7 @@ const migrations: Migration[] = [
       console.log('[Migration 003] Adding planning tables...');
       
       // Create planning_questions table if not exists
-      db.exec(`
+      _db.exec(`
         CREATE TABLE IF NOT EXISTS planning_questions (
           id TEXT PRIMARY KEY,
           task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
@@ -91,7 +91,7 @@ const migrations: Migration[] = [
       `);
       
       // Create planning_specs table if not exists
-      db.exec(`
+      _db.exec(`
         CREATE TABLE IF NOT EXISTS planning_specs (
           id TEXT PRIMARY KEY,
           task_id TEXT NOT NULL UNIQUE REFERENCES tasks(id) ON DELETE CASCADE,
@@ -103,11 +103,11 @@ const migrations: Migration[] = [
       `);
       
       // Create index
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_planning_questions_task ON planning_questions(task_id, sort_order)`);
+      _db.exec(`CREATE INDEX IF NOT EXISTS idx_planning_questions_task ON planning_questions(task_id, sort_order)`);
       
       // Update tasks status check constraint to include 'planning'
       // SQLite doesn't support ALTER CONSTRAINT, so we check if it's needed
-      const taskSchema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='tasks'").get() as { sql: string } | undefined;
+      const taskSchema = _db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='tasks'").get() as { sql: string } | undefined;
       if (taskSchema && !taskSchema.sql.includes("'planning'")) {
         console.log('[Migration 003] Note: tasks table needs planning status - will be handled by schema recreation on fresh dbs');
       }
@@ -119,35 +119,35 @@ const migrations: Migration[] = [
     up: (_db) => {
       console.log('[Migration 004] Adding planning session columns to tasks...');
       
-      const tasksInfo = db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[];
+      const tasksInfo = _db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[];
       
       // Add planning_session_key column
       if (!tasksInfo.some(col => col.name === 'planning_session_key')) {
-        db.exec(`ALTER TABLE tasks ADD COLUMN planning_session_key TEXT`);
+        _db.exec(`ALTER TABLE tasks ADD COLUMN planning_session_key TEXT`);
         console.log('[Migration 004] Added planning_session_key');
       }
       
       // Add planning_messages column (stores JSON array of messages)
       if (!tasksInfo.some(col => col.name === 'planning_messages')) {
-        db.exec(`ALTER TABLE tasks ADD COLUMN planning_messages TEXT`);
+        _db.exec(`ALTER TABLE tasks ADD COLUMN planning_messages TEXT`);
         console.log('[Migration 004] Added planning_messages');
       }
       
       // Add planning_complete column
       if (!tasksInfo.some(col => col.name === 'planning_complete')) {
-        db.exec(`ALTER TABLE tasks ADD COLUMN planning_complete INTEGER DEFAULT 0`);
+        _db.exec(`ALTER TABLE tasks ADD COLUMN planning_complete INTEGER DEFAULT 0`);
         console.log('[Migration 004] Added planning_complete');
       }
       
       // Add planning_spec column (stores final spec JSON)
       if (!tasksInfo.some(col => col.name === 'planning_spec')) {
-        db.exec(`ALTER TABLE tasks ADD COLUMN planning_spec TEXT`);
+        _db.exec(`ALTER TABLE tasks ADD COLUMN planning_spec TEXT`);
         console.log('[Migration 004] Added planning_spec');
       }
       
       // Add planning_agents column (stores generated agents JSON)
       if (!tasksInfo.some(col => col.name === 'planning_agents')) {
-        db.exec(`ALTER TABLE tasks ADD COLUMN planning_agents TEXT`);
+        _db.exec(`ALTER TABLE tasks ADD COLUMN planning_agents TEXT`);
         console.log('[Migration 004] Added planning_agents');
       }
     }
@@ -157,9 +157,9 @@ const migrations: Migration[] = [
     name: 'add_github_repo_to_workspaces',
     up: (_db) => {
       console.log('[Migration 005] Adding github_repo to workspaces...');
-      const columns = db.prepare("PRAGMA table_info(workspaces)").all() as { name: string }[];
+      const columns = _db.prepare("PRAGMA table_info(workspaces)").all() as { name: string }[];
       if (!columns.some(c => c.name === 'github_repo')) {
-        db.exec("ALTER TABLE workspaces ADD COLUMN github_repo TEXT");
+        _db.exec("ALTER TABLE workspaces ADD COLUMN github_repo TEXT");
         console.log('[Migration 005] Added github_repo column');
       }
     }
@@ -171,9 +171,9 @@ const migrations: Migration[] = [
       console.log('[Migration 007] Adding workspace hierarchy (parent_id)...');
       
       // Add parent_id column to workspaces
-      const columns = db.prepare("PRAGMA table_info(workspaces)").all() as { name: string }[];
+      const columns = _db.prepare("PRAGMA table_info(workspaces)").all() as { name: string }[];
       if (!columns.some(c => c.name === 'parent_id')) {
-        db.exec("ALTER TABLE workspaces ADD COLUMN parent_id TEXT REFERENCES workspaces(id)");
+        _db.exec("ALTER TABLE workspaces ADD COLUMN parent_id TEXT REFERENCES workspaces(id)");
         console.log('[Migration 007] Added parent_id column');
       }
       
@@ -187,7 +187,7 @@ const migrations: Migration[] = [
     name: 'add_tasks_archive_table',
     up: (_db) => {
       console.log('[Migration 006] Creating tasks_archive table...');
-      db.exec(`
+      _db.exec(`
         CREATE TABLE IF NOT EXISTS tasks_archive (
           id TEXT PRIMARY KEY,
           title TEXT NOT NULL,
@@ -221,7 +221,7 @@ const migrations: Migration[] = [
     name: 'add_task_reviews',
     up: (_db) => {
       console.log('[Migration 008] Creating task_reviews table for parallel reviews...');
-      db.exec(`
+      _db.exec(`
         CREATE TABLE IF NOT EXISTS task_reviews (
           id TEXT PRIMARY KEY,
           task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
@@ -245,7 +245,7 @@ const migrations: Migration[] = [
     up: (_db) => {
       console.log('[Migration 009] Adding commit and pr review types...');
       // SQLite doesn't support ALTER CHECK constraint, so we recreate the table
-      db.exec(`
+      _db.exec(`
         CREATE TABLE IF NOT EXISTS task_reviews_new (
           id TEXT PRIMARY KEY,
           task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
@@ -274,10 +274,10 @@ const migrations: Migration[] = [
     up: (_db) => {
       console.log('[Migration 010] Adding task hierarchy (parent_task_id)...');
       
-      const columns = db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[];
+      const columns = _db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[];
       if (!columns.some(c => c.name === 'parent_task_id')) {
-        db.exec("ALTER TABLE tasks ADD COLUMN parent_task_id TEXT REFERENCES tasks(id)");
-        db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id)");
+        _db.exec("ALTER TABLE tasks ADD COLUMN parent_task_id TEXT REFERENCES tasks(id)");
+        _db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id)");
         console.log('[Migration 010] Added parent_task_id column');
       }
       
@@ -291,7 +291,7 @@ const migrations: Migration[] = [
     name: 'add_agent_capabilities',
     up: (_db) => {
       console.log('[Migration 011] Creating agent_capabilities table...');
-      db.exec(`
+      _db.exec(`
         CREATE TABLE IF NOT EXISTS agent_capabilities (
           id TEXT PRIMARY KEY,
           agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
@@ -313,10 +313,10 @@ const migrations: Migration[] = [
     up: (_db) => {
       console.log('[Migration 012] Adding openclaw_agent_id to agents...');
       
-      const columns = db.prepare("PRAGMA table_info(agents)").all() as { name: string }[];
+      const columns = _db.prepare("PRAGMA table_info(agents)").all() as { name: string }[];
       if (!columns.some(c => c.name === 'openclaw_agent_id')) {
-        db.exec("ALTER TABLE agents ADD COLUMN openclaw_agent_id TEXT");
-        db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_openclaw_id_unique ON agents(openclaw_agent_id) WHERE openclaw_agent_id IS NOT NULL");
+        _db.exec("ALTER TABLE agents ADD COLUMN openclaw_agent_id TEXT");
+        _db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_openclaw_id_unique ON agents(openclaw_agent_id) WHERE openclaw_agent_id IS NOT NULL");
         console.log('[Migration 012] Added openclaw_agent_id column with unique constraint');
       }
     }
@@ -326,9 +326,9 @@ const migrations: Migration[] = [
 /**
  * Run all pending migrations
  */
-export function runMigrations(db: Database.Database): void {
+export function runMigrations(_db: Database.Database): void {
   // Create migrations tracking table
-  db.exec(`
+  _db.exec(`
     CREATE TABLE IF NOT EXISTS _migrations (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -338,7 +338,7 @@ export function runMigrations(db: Database.Database): void {
   
   // Get already applied migrations
   const applied = new Set(
-    (db.prepare('SELECT id FROM _migrations').all() as { id: string }[]).map(m => m.id)
+    (_db.prepare('SELECT id FROM _migrations').all() as { id: string }[]).map(m => m.id)
   );
   
   // Run pending migrations in order
@@ -351,9 +351,9 @@ export function runMigrations(db: Database.Database): void {
     
     try {
       // Run migration in a transaction
-      db.transaction(() => {
-        migration.up(db);
-        db.prepare('INSERT INTO _migrations (id, name) VALUES (?, ?)').run(migration.id, migration.name);
+      _db.transaction(() => {
+        migration.up(_db);
+        _db.prepare('INSERT INTO _migrations (id, name) VALUES (?, ?)').run(migration.id, migration.name);
       })();
       
       console.log(`[DB] Migration ${migration.id} completed`);
@@ -367,8 +367,8 @@ export function runMigrations(db: Database.Database): void {
 /**
  * Get migration status
  */
-export function getMigrationStatus(db: Database.Database): { applied: string[]; pending: string[] } {
-  const applied = (db.prepare('SELECT id FROM _migrations ORDER BY id').all() as { id: string }[]).map(m => m.id);
+export function getMigrationStatus(_db: Database.Database): { applied: string[]; pending: string[] } {
+  const applied = (_db.prepare('SELECT id FROM _migrations ORDER BY id').all() as { id: string }[]).map(m => m.id);
   const pending = migrations.filter(m => !applied.includes(m.id)).map(m => m.id);
   return { applied, pending };
 }

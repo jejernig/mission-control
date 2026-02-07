@@ -310,6 +310,7 @@ export interface CreateTaskRequest {
 
 export interface UpdateTaskRequest extends Partial<CreateTaskRequest> {
   status?: TaskStatus;
+  planning_complete?: number;
 }
 
 export interface SendMessageRequest {

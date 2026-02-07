@@ -11,7 +11,7 @@ import {
 } from '@/lib/api-utils';
 
 // GET /api/agents/[id] - Get a single agent
-export const GET = withErrorHandler(async (request, context) => {
+export const GET = withErrorHandler<{ params: Promise<{ id: string }> }>(async (request, context) => {
   const { id } = await extractParams<{ id: string }>(context);
   const agent = queryOne<Agent>('SELECT * FROM agents WHERE id = ?', [id]);
 
@@ -22,7 +22,7 @@ export const GET = withErrorHandler(async (request, context) => {
 });
 
 // PATCH /api/agents/[id] - Update an agent
-export const PATCH = withErrorHandler(async (request, context) => {
+export const PATCH = withErrorHandler<{ params: Promise<{ id: string }> }>(async (request, context) => {
   const { id } = await extractParams<{ id: string }>(context);
   const body: UpdateAgentRequest = await request.json();
 
@@ -80,7 +80,7 @@ export const PATCH = withErrorHandler(async (request, context) => {
 });
 
 // DELETE /api/agents/[id] - Delete an agent
-export const DELETE = withErrorHandler(async (request, context) => {
+export const DELETE = withErrorHandler<{ params: Promise<{ id: string }> }>(async (request, context) => {
   const { id } = await extractParams<{ id: string }>(context);
   const existing = queryOne<Agent>('SELECT * FROM agents WHERE id = ?', [id]);
 
