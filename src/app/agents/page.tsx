@@ -19,8 +19,6 @@ function AgentsPageContent() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const _orgId = workspaces.find((w) => w.id === 'default')?.organization_id ?? 'org-default';
-
   // Org-wide agents have workspace_id === null
   const orgAgents = agents.filter((a) => a.workspace_id === null);
   const workspaceAgents = agents.filter((a) => a.workspace_id !== null);
@@ -38,7 +36,7 @@ function AgentsPageContent() {
       setError(null);
       await updateAgent.mutateAsync({
         agentId: agent.id,
-        updates: { workspace_id: null },
+        updates: { workspace_id: null as any }, // Type allows null in DB
       });
     } catch (e) {
       console.error('Failed to promote agent to org:', e);
