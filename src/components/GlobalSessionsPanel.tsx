@@ -7,6 +7,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { X, RefreshCw, Zap, Bot, Circle, XCircle } from 'lucide-react';
+import { formatDuration, formatTokens, parseSessionKey } from '@/lib/client-utils';
 
 interface LiveSession {
   key: string;
@@ -59,40 +60,6 @@ export function GlobalSessionsPanel({ onClose }: GlobalSessionsPanelProps) {
   const handleRefresh = () => {
     setRefreshing(true);
     loadSessions();
-  };
-
-  const formatDuration = (updatedAt: number) => {
-    const now = Date.now();
-    const duration = now - updatedAt;
-    const seconds = Math.floor(duration / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-
-    if (hours > 0) {
-      return `${hours}h ${minutes % 60}m ago`;
-    } else if (minutes > 0) {
-      return `${minutes}m ago`;
-    } else {
-      return 'just now';
-    }
-  };
-
-  const formatTokens = (tokens: number) => {
-    if (tokens >= 1000000) {
-      return `${(tokens / 1000000).toFixed(1)}M`;
-    } else if (tokens >= 1000) {
-      return `${(tokens / 1000).toFixed(1)}K`;
-    }
-    return tokens.toString();
-  };
-
-  const parseSessionKey = (key: string) => {
-    // e.g., "agent:code-reviewer:subagent:f48019c1-..."
-    const parts = key.split(':');
-    return {
-      agentName: parts[1] || 'Unknown',
-      sessionId: parts[3] || key,
-    };
   };
 
   return (

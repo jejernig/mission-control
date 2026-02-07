@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import { FileText, Link as LinkIcon, Package, ExternalLink, Eye } from 'lucide-react';
 import { debug } from '@/lib/debug';
+import { formatTimestamp } from '@/lib/client-utils';
 import type { TaskDeliverable } from '@/lib/types';
 
 interface DeliverablesListProps {
@@ -99,16 +100,6 @@ export function DeliverablesList({ taskId }: DeliverablesListProps) {
       debug.file('Opening preview', { path: deliverable.path });
       window.open(`/api/files/preview?path=${encodeURIComponent(deliverable.path)}`, '_blank');
     }
-  };
-
-  const formatTimestamp = (timestamp: string) => {
-    const date = new Date(timestamp);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
   };
 
   if (loading) {
