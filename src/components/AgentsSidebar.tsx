@@ -42,7 +42,7 @@ export function AgentsSidebar({ workspaceId }: AgentsSidebarProps) {
     if (agents.length > 0) {
       loadOpenClawSessions();
     }
-  }, [agents.length]);
+  }, [agents, setAgentOpenClawSession]);
 
   // Load active sub-agent count
   useEffect(() => {

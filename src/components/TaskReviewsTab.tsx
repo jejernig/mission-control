@@ -31,19 +31,6 @@ export function TaskReviewsTab({ taskId }: TaskReviewsTabProps) {
   const [loading, setLoading] = useState(true);
   const [initializing, setInitializing] = useState(false);
 
-  async function fetchReviews() {
-    try {
-      const res = await fetch(`/api/tasks/${taskId}/reviews`);
-      if (res.ok) {
-        setReviews(await res.json());
-      }
-    } catch (error) {
-      console.error('Failed to fetch reviews:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function initializeReviews() {
     setInitializing(true);
     try {
@@ -59,6 +46,19 @@ export function TaskReviewsTab({ taskId }: TaskReviewsTabProps) {
   }
 
   useEffect(() => {
+    async function fetchReviews() {
+      try {
+        const res = await fetch(`/api/tasks/${taskId}/reviews`);
+        if (res.ok) {
+          setReviews(await res.json());
+        }
+      } catch (error) {
+        console.error('Failed to fetch reviews:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
     fetchReviews();
   }, [taskId]);
 

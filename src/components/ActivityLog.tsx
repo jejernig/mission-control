@@ -17,22 +17,22 @@ export function ActivityLog({ taskId }: ActivityLogProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const loadActivities = async () => {
+      try {
+        const res = await fetch(`/api/tasks/${taskId}/activities`);
+        if (res.ok) {
+          const data = await res.json();
+          setActivities(data);
+        }
+      } catch (error) {
+        console.error('Failed to load activities:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     loadActivities();
   }, [taskId]);
-
-  const loadActivities = async () => {
-    try {
-      const res = await fetch(`/api/tasks/${taskId}/activities`);
-      if (res.ok) {
-        const data = await res.json();
-        setActivities(data);
-      }
-    } catch (error) {
-      console.error('Failed to load activities:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const getActivityIcon = (type: string) => {
     switch (type) {
