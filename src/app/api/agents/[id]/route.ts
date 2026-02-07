@@ -1,14 +1,13 @@
 import { v4 as uuidv4 } from 'uuid';
 import { queryOne, run } from '@/lib/db';
 import type { Agent, UpdateAgentRequest } from '@/lib/types';
-import {
-  withErrorHandler,
-  apiSuccess,
-  apiError,
-  checkEntityExists,
+import { 
+  withErrorHandler, 
+  apiSuccess, 
+  checkEntityExists, 
   extractParams,
   buildUpdateClause,
-  ErrorStatus,
+  badRequest
 } from '@/lib/api-utils';
 
 // GET /api/agents/[id] - Get a single agent
@@ -31,37 +30,50 @@ export const PATCH = withErrorHandler(async (request, context) => {
   const error = checkEntityExists(existing, 'Agent');
   if (error) return error;
 
-  const updates: Record<string, unknown> = {};
+  // Build update clause from body (excluding special handling fields)
+  const { status, is_master, ...simpleUpdates } = body;
+  const { clause, values } = buildUpdateClause(simpleUpdates);
 
-  if (body.name !== undefined) updates.name = body.name;
-  if (body.role !== undefined) updates.role = body.role;
-  if (body.description !== undefined) updates.description = body.description;
-  if (body.avatar_emoji !== undefined) updates.avatar_emoji = body.avatar_emoji;
-  if (body.status !== undefined) {
-    updates.status = body.status;
+  // Handle special fields manually
+  const additionalUpdates: string[] = [];
+  const additionalValues: unknown[] = [];
+
+  if (status !== undefined) {
+    additionalUpdates.push('status = ?');
+    additionalValues.push(status);
 
     // Log status change event
     const now = new Date().toISOString();
     run(
       `INSERT INTO events (id, type, agent_id, message, created_at)
        VALUES (?, ?, ?, ?, ?)`,
-      [uuidv4(), 'agent_status_changed', id, `${existing.name} is now ${body.status}`, now]
+      [uuidv4(), 'agent_status_changed', id, `${existing!.name} is now ${status}`, now]
     );
   }
-  if (body.is_master !== undefined) updates.is_master = body.is_master ? 1 : 0;
-  if (body.soul_md !== undefined) updates.soul_md = body.soul_md;
-  if (body.user_md !== undefined) updates.user_md = body.user_md;
-  if (body.agents_md !== undefined) updates.agents_md = body.agents_md;
-  if (body.workspace_id !== undefined) updates.workspace_id = body.workspace_id;
 
-  if (Object.keys(updates).length === 0) {
-    return apiError('No updates provided', ErrorStatus.BAD_REQUEST);
+  if (is_master !== undefined) {
+    additionalUpdates.push('is_master = ?');
+    additionalValues.push(is_master ? 1 : 0);
   }
 
-  updates.updated_at = new Date().toISOString();
+  // Combine all updates
+  const allUpdates = [
+    ...(clause ? [clause] : []),
+    ...additionalUpdates,
+    'updated_at = ?'
+  ];
+  const allValues = [
+    ...values,
+    ...additionalValues,
+    new Date().toISOString(),
+    id
+  ];
 
-  const { clause, values } = buildUpdateClause(updates);
-  run(`UPDATE agents SET ${clause} WHERE id = ?`, [...values, id]);
+  if (allUpdates.length === 1) { // Only 'updated_at = ?'
+    return badRequest('No updates provided');
+  }
+
+  run(`UPDATE agents SET ${allUpdates.join(', ')} WHERE id = ?`, allValues);
 
   const agent = queryOne<Agent>('SELECT * FROM agents WHERE id = ?', [id]);
   return apiSuccess(agent);

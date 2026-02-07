@@ -7,8 +7,6 @@ const createQueryClient = () =>
   new QueryClient({
     defaultOptions: {
       queries: {
-        // Enable Suspense mode globally
-        suspense: true,
         staleTime: 5 * 60 * 1000, // 5 minutes
         retry: 1,
         refetchOnWindowFocus: false,
