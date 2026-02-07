@@ -4,38 +4,30 @@
  * Retrieves saved agent assignment suggestions for a task
  */
 
-import { NextRequest, NextResponse } from 'next/server';
 import { queryOne } from '@/lib/db';
 import { agentMatcher } from '@/lib/services/agent-matcher';
 import type { Task } from '@/lib/types';
+import {
+  withErrorHandler,
+  extractParams,
+  checkEntityExists,
+  apiSuccess,
+} from '@/lib/api-utils';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
+export const GET = withErrorHandler<{ params: Promise<{ id: string }> }>(async (request, context) => {
+  const { id } = await extractParams<{ id: string }>(context);
 
-    // Verify task exists
-    const task = queryOne<Task>('SELECT id FROM tasks WHERE id = ?', [id]);
-    
-    if (!task) {
-      return NextResponse.json({ error: 'Task not found' }, { status: 404 });
-    }
+  // Verify task exists
+  const task = queryOne<Task>('SELECT id FROM tasks WHERE id = ?', [id]);
+  const taskError = checkEntityExists(task, 'Task');
+  if (taskError) return taskError;
 
-    // Get saved suggestions
-    const suggestions = await agentMatcher.getSuggestions(id);
+  // Get saved suggestions
+  const suggestions = await agentMatcher.getSuggestions(id);
 
-    return NextResponse.json({
-      task_id: id,
-      suggestions,
-      count: suggestions.length
-    });
-  } catch (error) {
-    console.error('[API] Failed to fetch suggestions:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch suggestions' },
-      { status: 500 }
-    );
-  }
-}
+  return apiSuccess({
+    task_id: id,
+    suggestions,
+    count: suggestions.length
+  });
+});
