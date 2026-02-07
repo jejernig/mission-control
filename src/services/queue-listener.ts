@@ -9,7 +9,7 @@ const logger = {
 };
 
 interface PipelineMessage {
-  type: 'process_planning' | 'assign_workers' | 'coordinate_reviews' | 'spawn_architect';
+  type: 'process_planning' | 'assign_workers' | 'coordinate_reviews' | 'spawn_architect' | 'spawn_requests';
   timestamp: string;
   batchSize: number;
 }
@@ -22,6 +22,7 @@ const QUEUE_CONFIG = {
   assign: { queue: 'pipeline.assign', agent: 'main' },
   review: { queue: 'pipeline.review', agent: 'main' },
   architect: { queue: 'pipeline.architect', agent: 'main' },
+  spawnRequests: { queue: 'pipeline.spawn-requests', agent: 'main' },
 };
 
 export class QueueListener {
@@ -88,6 +89,11 @@ export class QueueListener {
           // Route to appropriate worker
           let count = 0;
           switch (message.type) {
+            case 'spawn_requests':
+              count = await this.processSpawnRequests();
+              logger.info(`🏗️ Processed ${count} spawn requests`);
+              break;
+            
             case 'spawn_architect':
               count = await spawnArchitects(message.batchSize);
               logger.info(`🏗️ Spawned ${count} architects`);
@@ -244,6 +250,8 @@ Step 4: Report results via sessions_send to main jarvis session:
 sessions_send --label jarvis --message "🏗️ Spawned {count} architects for planning specs"
 
 Work through the list systematically. Be the coordinator, not the doer.`,
+
+      spawn_requests: `N/A - handled by processSpawnRequests(), not spawnAgent()`,
     };
 
     return tasks[message.type];
@@ -262,6 +270,49 @@ Work through the list systematically. Be the coordinator, not the doer.`,
       msg.content,
       { ...msg.properties, headers }
     );
+  }
+
+  private async processSpawnRequests(): Promise<number> {
+    return new Promise((resolve, reject) => {
+      logger.info('🏗️ Running spawn request processor...');
+      
+      const proc = spawn('npx', ['tsx', 'src/scripts/process-spawn-requests-direct.ts'], {
+        cwd: process.env.HOME + '/source/mission-control',
+        stdio: 'pipe',
+      });
+
+      let output = '';
+      let errorOutput = '';
+      
+      proc.stdout?.on('data', (data) => { 
+        const text = data.toString();
+        output += text;
+        logger.info(text.trim());
+      });
+      
+      proc.stderr?.on('data', (data) => { 
+        errorOutput += data.toString();
+      });
+
+      proc.on('close', (code) => {
+        if (code === 0) {
+          // Parse output to extract count of requests processed
+          const match = output.match(/Wrote (\d+) requests to queue file/);
+          const count = match ? parseInt(match[1]) : 0;
+          logger.info(`✅ Spawn request processor completed: ${count} requests queued`);
+          resolve(count);
+        } else {
+          logger.error(`❌ Spawn request processor failed with code ${code}`);
+          if (errorOutput) logger.error(`stderr: ${errorOutput}`);
+          reject(new Error(`Processor exit code ${code}`));
+        }
+      });
+
+      proc.on('error', (error) => {
+        logger.error('❌ Failed to run spawn request processor:', error);
+        reject(error);
+      });
+    });
   }
 
   private async shutdown() {

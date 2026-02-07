@@ -31,6 +31,7 @@ export const ErrorStatus = {
   NOT_FOUND: 404,
   CONFLICT: 409,
   INTERNAL_SERVER: 500,
+  SERVICE_UNAVAILABLE: 503,
 } as const;
 
 /**
