@@ -1,138 +1,100 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import {
+  withErrorHandler,
+  apiSuccess,
+  apiError,
+  checkEntityExists,
+  extractParams,
+  buildUpdateClause,
+  ErrorStatus,
+} from '@/lib/api-utils';
 
 // GET /api/workspaces/[id] - Get a single workspace
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
+export const GET = withErrorHandler(async (request, context) => {
+  const { id } = await extractParams<{ id: string }>(context);
+  const db = getDb();
   
-  try {
-    const db = getDb();
-    
-    // Try to find by ID or slug
-    const workspace = db.prepare(
-      'SELECT * FROM workspaces WHERE id = ? OR slug = ?'
-    ).get(id, id);
-    
-    if (!workspace) {
-      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
-    }
-    
-    return NextResponse.json(workspace);
-  } catch (error) {
-    console.error('Failed to fetch workspace:', error);
-    return NextResponse.json({ error: 'Failed to fetch workspace' }, { status: 500 });
-  }
-}
+  // Try to find by ID or slug
+  const workspace = db.prepare(
+    'SELECT * FROM workspaces WHERE id = ? OR slug = ?'
+  ).get(id, id);
+  
+  const error = checkEntityExists(workspace, 'Workspace');
+  if (error) return error;
+  
+  return apiSuccess(workspace);
+});
 
 // PATCH /api/workspaces/[id] - Update a workspace
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
+export const PATCH = withErrorHandler(async (request, context) => {
+  const { id } = await extractParams<{ id: string }>(context);
+  const body = await request.json();
+  const { name, description, icon, github_repo, parent_id } = body;
   
-  try {
-    const body = await request.json();
-    const { name, description, icon, github_repo, parent_id } = body;
-    
-    const db = getDb();
-    
-    // Check workspace exists
-    const existing = db.prepare('SELECT * FROM workspaces WHERE id = ?').get(id);
-    if (!existing) {
-      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
-    }
-    
-    // Build update query dynamically
-    const updates: string[] = [];
-    const values: unknown[] = [];
-    
-    if (name !== undefined) {
-      updates.push('name = ?');
-      values.push(name);
-    }
-    if (description !== undefined) {
-      updates.push('description = ?');
-      values.push(description);
-    }
-    if (icon !== undefined) {
-      updates.push('icon = ?');
-      values.push(icon);
-    }
-    if (github_repo !== undefined) {
-      updates.push('github_repo = ?');
-      values.push(github_repo);
-    }
-    if (parent_id !== undefined) {
-      updates.push('parent_id = ?');
-      values.push(parent_id);
-    }
-    
-    if (updates.length === 0) {
-      return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
-    }
-    
-    updates.push("updated_at = datetime('now')");
-    values.push(id);
-    
-    db.prepare(`
-      UPDATE workspaces SET ${updates.join(', ')} WHERE id = ?
-    `).run(...values);
-    
-    const workspace = db.prepare('SELECT * FROM workspaces WHERE id = ?').get(id);
-    return NextResponse.json(workspace);
-  } catch (error) {
-    console.error('Failed to update workspace:', error);
-    return NextResponse.json({ error: 'Failed to update workspace' }, { status: 500 });
+  const db = getDb();
+  
+  // Check workspace exists
+  const existing = db.prepare('SELECT * FROM workspaces WHERE id = ?').get(id);
+  const error = checkEntityExists(existing, 'Workspace');
+  if (error) return error;
+  
+  // Build update object
+  const updates: Record<string, unknown> = {};
+  if (name !== undefined) updates.name = name;
+  if (description !== undefined) updates.description = description;
+  if (icon !== undefined) updates.icon = icon;
+  if (github_repo !== undefined) updates.github_repo = github_repo;
+  if (parent_id !== undefined) updates.parent_id = parent_id;
+  
+  if (Object.keys(updates).length === 0) {
+    return apiError('No fields to update', ErrorStatus.BAD_REQUEST);
   }
-}
+  
+  const { clause, values } = buildUpdateClause(updates);
+  
+  // Note: SQLite doesn't support named params in the same way, so we manually add updated_at
+  db.prepare(`
+    UPDATE workspaces SET ${clause}, updated_at = datetime('now') WHERE id = ?
+  `).run(...values, id);
+  
+  const workspace = db.prepare('SELECT * FROM workspaces WHERE id = ?').get(id);
+  return apiSuccess(workspace);
+});
 
 // DELETE /api/workspaces/[id] - Delete a workspace
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
+export const DELETE = withErrorHandler(async (request, context) => {
+  const { id } = await extractParams<{ id: string }>(context);
+  const db = getDb();
   
-  try {
-    const db = getDb();
-    
-    // Don't allow deleting the default workspace
-    if (id === 'default') {
-      return NextResponse.json({ error: 'Cannot delete the default workspace' }, { status: 400 });
-    }
-    
-    // Check workspace exists
-    const existing = db.prepare('SELECT * FROM workspaces WHERE id = ?').get(id);
-    if (!existing) {
-      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
-    }
-    
-    // Check if workspace has tasks or agents
-    const taskCount = db.prepare(
-      'SELECT COUNT(*) as count FROM tasks WHERE workspace_id = ?'
-    ).get(id) as { count: number };
-    
-    const agentCount = db.prepare(
-      'SELECT COUNT(*) as count FROM agents WHERE workspace_id = ?'
-    ).get(id) as { count: number };
-    
-    if (taskCount.count > 0 || agentCount.count > 0) {
-      return NextResponse.json({ 
-        error: 'Cannot delete workspace with existing tasks or agents',
-        taskCount: taskCount.count,
-        agentCount: agentCount.count
-      }, { status: 400 });
-    }
-    
-    db.prepare('DELETE FROM workspaces WHERE id = ?').run(id);
-    
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('Failed to delete workspace:', error);
-    return NextResponse.json({ error: 'Failed to delete workspace' }, { status: 500 });
+  // Don't allow deleting the default workspace
+  if (id === 'default') {
+    return apiError('Cannot delete the default workspace', ErrorStatus.BAD_REQUEST);
   }
-}
+  
+  // Check workspace exists
+  const existing = db.prepare('SELECT * FROM workspaces WHERE id = ?').get(id);
+  const error = checkEntityExists(existing, 'Workspace');
+  if (error) return error;
+  
+  // Check if workspace has tasks or agents
+  const taskCount = db.prepare(
+    'SELECT COUNT(*) as count FROM tasks WHERE workspace_id = ?'
+  ).get(id) as { count: number };
+  
+  const agentCount = db.prepare(
+    'SELECT COUNT(*) as count FROM agents WHERE workspace_id = ?'
+  ).get(id) as { count: number };
+  
+  if (taskCount.count > 0 || agentCount.count > 0) {
+    return NextResponse.json({ 
+      error: 'Cannot delete workspace with existing tasks or agents',
+      taskCount: taskCount.count,
+      agentCount: agentCount.count
+    }, { status: ErrorStatus.BAD_REQUEST });
+  }
+  
+  db.prepare('DELETE FROM workspaces WHERE id = ?').run(id);
+  
+  return apiSuccess({ success: true });
+});
